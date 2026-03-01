@@ -36,6 +36,7 @@ load(
     "mozc_cc_library",
     "mozc_cc_test",
     "mozc_py_binary",
+    "mozc_select",
     "mozc_select_enable_usage_rewriter",
 )
 
@@ -283,10 +284,16 @@ mozc_cc_test(
 
 # OpenCC rewriter: when MOZC_USE_OPENCC is defined and opencc is linked,
 # converts candidates to kyūjitai via jp2t. Otherwise no-op.
+# Enabled at build time for Linux (oss_linux, linux) when libopencc is available.
 mozc_cc_library(
     name = "opencc_rewriter",
     srcs = ["opencc_rewriter.cc"],
     hdrs = ["opencc_rewriter.h"],
+    local_defines = mozc_select(
+        default = [],
+        linux = ["MOZC_USE_OPENCC"],
+        oss_linux = ["MOZC_USE_OPENCC"],
+    ),
     deps = [
         ":rewriter_interface",
         "//converter:segments",
@@ -294,7 +301,11 @@ mozc_cc_library(
         "//request:conversion_request",
         "@com_google_absl//absl/log:check",
         "@com_google_absl//absl/strings",
-    ],
+    ] + mozc_select(
+        default = [],
+        linux = ["@opencc//:opencc"],
+        oss_linux = ["@opencc//:opencc"],
+    ),
     alwayslink = 1,
 )
 

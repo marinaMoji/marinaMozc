@@ -247,7 +247,8 @@ MozcEngine::MozcEngine()
   }
   property_handler_ = std::make_unique<PropertyHandler>(
       std::make_unique<LocaleBasedMessageTranslator>(GetMessageLocale()),
-      ibus_config_.IsActiveOnLaunch(), client_.get());
+      ibus_config_.IsActiveOnLaunch(), client_.get(),
+      MozcToolbarAvailable());
 
   // TODO(yusukes): write a unit test to check if the capability is set
   // as expected.
@@ -346,7 +347,7 @@ void MozcEngine::FocusIn(IbusEngineWrapper *engine) {
   current_engine_ = engine->GetEngine();
   property_handler_->Register(engine);
   UpdatePreeditMethod();
-  if (MozcToolbarAvailable()) {
+  if (MozcToolbarAvailable() && toolbar_visible_) {
     MozcToolbarShow(this);
   }
 }
@@ -428,6 +429,18 @@ bool MozcEngine::ProcessKeyEvent(IbusEngineWrapper *engine, uint keyval,
 void MozcEngine::PropertyActivate(IbusEngineWrapper *engine,
                                   const char *property_name,
                                   uint property_state) {
+  // Hide/Show toolbar: toggle visibility and update menu label.
+  if (property_name != nullptr && strcmp(property_name, "Toolbar") == 0 &&
+      MozcToolbarAvailable()) {
+    toolbar_visible_ = !toolbar_visible_;
+    if (toolbar_visible_) {
+      MozcToolbarShow(this);
+    } else {
+      MozcToolbarHide();
+    }
+    property_handler_->UpdateToolbarLabel(engine, toolbar_visible_);
+    return;
+  }
   // Odoriji palette button: same as Ctrl+Shift+2 (open iteration marks palette).
   if (property_name != nullptr &&
       strcmp(property_name, "Option.OdorijiPalette") == 0) {

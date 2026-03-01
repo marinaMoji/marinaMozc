@@ -192,6 +192,12 @@ pkg_config_repository(
     ],
 )
 
+# OpenCC (optional: kyūjitai conversion via jp2t when MOZC_USE_OPENCC is defined)
+pkg_config_repository(
+    name = "opencc",
+    packages = ["opencc"],
+)
+
 # Qt for Linux
 pkg_config_repository(
     name = "qt_linux",

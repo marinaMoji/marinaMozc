@@ -205,19 +205,26 @@ mozc_cc_library(
         oss_linux = ["MOZC_HAVE_GTK_TOOLBAR"],
         default = [],
     ),
+    # Avoid absolute -I paths under /usr/lib (Bazel sandbox disallows paths outside execution root).
+    # System GTK and dependencies (Pango, ATK, etc.) needed for toolbar.
     copts = mozc_select(
         linux = [
             "-I/usr/include/gtk-3.0",
             "-I/usr/include/glib-2.0",
             "-I/usr/include/gdk-pixbuf-2.0",
-            # glib-2.0 internal headers; path may be /usr/lib/x86_64-linux-gnu/glib-2.0/include on some distros
-            "-I/usr/lib/glib-2.0/include",
+            "-I/usr/include/pango-1.0",
+            "-I/usr/include/cairo",
+            "-I/usr/include/harfbuzz",
+            "-I/usr/include/atk-1.0",
         ],
         oss_linux = [
             "-I/usr/include/gtk-3.0",
             "-I/usr/include/glib-2.0",
             "-I/usr/include/gdk-pixbuf-2.0",
-            "-I/usr/lib/glib-2.0/include",
+            "-I/usr/include/pango-1.0",
+            "-I/usr/include/cairo",
+            "-I/usr/include/harfbuzz",
+            "-I/usr/include/atk-1.0",
         ],
         default = [],
     ),

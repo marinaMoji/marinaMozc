@@ -157,6 +157,9 @@ class MozcEngine : public EngineInterface {
   // Last focused IBus engine; used by toolbar to send commands and update UI.
   IBusEngine *current_engine_ = nullptr;
 
+  // When true, show toolbar on focus; toggled by IME menu "Hide/Show toolbar".
+  bool toolbar_visible_ = true;
+
   friend class MozcEngineTestPeer;
 };
 

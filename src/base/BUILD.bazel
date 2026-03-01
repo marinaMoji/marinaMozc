@@ -542,6 +542,7 @@ mozc_cc_library(
         linux = [
             'MOZC_DOCUMENT_DIR=\\"' + LINUX_MOZC_DOCUMENT_DIR + '\\"',
             'MOZC_SERVER_DIR=\\"' + LINUX_MOZC_SERVER_DIR + '\\"',
+            "MARINAMOZC",
         ],
     ),
     deps = [

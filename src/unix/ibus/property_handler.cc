@@ -168,7 +168,8 @@ bool GetDisabled(IbusEngineWrapper *engine) {
 
 PropertyHandler::PropertyHandler(
     std::unique_ptr<MessageTranslatorInterface> translator,
-    bool is_active_on_launch, client::ClientInterface *client)
+    bool is_active_on_launch, client::ClientInterface *client,
+    bool toolbar_available)
     : prop_root_(),
       prop_composition_mode_(nullptr),
       prop_mozc_tool_(nullptr),
@@ -193,6 +194,9 @@ PropertyHandler::PropertyHandler(
   AppendToolPropertyToPanel();
   AppendTraditionalKanjiPropertyToPanel();
   AppendOdorijiPalettePropertyToPanel();
+  if (toolbar_available) {
+    AppendToolbarPropertyToPanel();
+  }
 
   // We have to sink |prop_root_| as well so ibus_engine_register_properties()
   // in FocusIn() does not destruct it.
@@ -210,6 +214,10 @@ PropertyHandler::~PropertyHandler() {
   prop_traditional_kanji_.Unref();
 
   prop_odoriji_palette_.Unref();
+
+  if (prop_toolbar_.IsInitialized()) {
+    prop_toolbar_.Unref();
+  }
 
   // Destroy all objects under the root.
   prop_root_.Unref();
@@ -330,7 +338,7 @@ void PropertyHandler::AppendTraditionalKanjiPropertyToPanel() {
   const std::string label =
       translator_->MaybeTranslate("Traditional kanji (Kyūjitai)");
   prop_traditional_kanji_.Initialize(
-      "Option.TraditionalKanji", IBUS_PROP_TYPE_TOGGLE, label, "" /* icon */,
+      "Option.TraditionalKanji", PROP_TYPE_TOGGLE, label, "" /* icon */,
       PROP_STATE_UNCHECKED, nullptr);
   prop_traditional_kanji_.RefSink();
   prop_root_.Append(&prop_traditional_kanji_);
@@ -340,10 +348,31 @@ void PropertyHandler::AppendOdorijiPalettePropertyToPanel() {
   const std::string label =
       translator_->MaybeTranslate("Odoriji (iteration marks)");
   prop_odoriji_palette_.Initialize(
-      "Option.OdorijiPalette", IBUS_PROP_TYPE_NORMAL, label, "" /* icon */,
+      "Option.OdorijiPalette", PROP_TYPE_NORMAL, label, "" /* icon */,
       PROP_STATE_UNCHECKED, nullptr);
   prop_odoriji_palette_.RefSink();
   prop_root_.Append(&prop_odoriji_palette_);
+}
+
+void PropertyHandler::AppendToolbarPropertyToPanel() {
+  const std::string label =
+      translator_->MaybeTranslate("Hide toolbar");
+  prop_toolbar_.Initialize("Toolbar", PROP_TYPE_NORMAL, label, "" /* icon */,
+                           PROP_STATE_UNCHECKED, nullptr);
+  prop_toolbar_.RefSink();
+  prop_root_.Append(&prop_toolbar_);
+}
+
+void PropertyHandler::UpdateToolbarLabel(IbusEngineWrapper *engine,
+                                        bool toolbar_visible) {
+  if (!prop_toolbar_.IsInitialized()) {
+    return;
+  }
+  const std::string label = toolbar_visible
+                                ? translator_->MaybeTranslate("Hide toolbar")
+                                : translator_->MaybeTranslate("Show toolbar");
+  prop_toolbar_.SetLabel(label);
+  engine->UpdateProperty(&prop_toolbar_);
 }
 
 void PropertyHandler::Update(IbusEngineWrapper *engine,

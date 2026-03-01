@@ -33,11 +33,11 @@ void FillCandidateWindow(commands::CandidateWindow* candidate_window,
                          int focused_index) {
   candidate_window->Clear();
   candidate_window->set_focused_index(static_cast<uint32_t>(focused_index));
-  candidate_window->set_size(kCount);
+  candidate_window->set_size(OdorijiPalette::kCount);
   candidate_window->set_position(0);
   candidate_window->set_category(commands::CONVERSION);
-  candidate_window->set_page_size(kCount);
-  for (size_t i = 0; i < kCount; ++i) {
+  candidate_window->set_page_size(OdorijiPalette::kCount);
+  for (size_t i = 0; i < OdorijiPalette::kCount; ++i) {
     auto* c = candidate_window->add_candidate();
     c->set_index(static_cast<uint32_t>(i));
     c->set_value(kOdorijiChars[i]);
@@ -119,7 +119,7 @@ void OdorijiPalette::OverlayOutput(commands::Output* output, int focused_index) 
       "\xe9\x80\x90\xe3\x82\x8a\xe8\xbf\x94\xe3\x81\x97\xe8\xa8\x98\xe5\x8f\xb7");  // 繰り返し記号
   segment->set_annotation(commands::Preedit::Segment::HIGHLIGHT);
   segment->set_value_length(6);
-  preedit->set_cursor_position(0);
+  preedit->set_cursor(0);
   FillCandidateWindow(output->mutable_candidate_window(), focused_index);
 }
 

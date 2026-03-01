@@ -10,6 +10,7 @@
 #include "protocol/commands.pb.h"
 
 #ifdef MOZC_HAVE_GTK_TOOLBAR
+#include <gdk/gdk.h>
 #include <gtk/gtk.h>
 #endif
 
@@ -79,40 +80,47 @@ void EnsureToolbarCreated() {
   if (g_toolbar_window != nullptr) {
     return;
   }
-  if (!gtk_init_check()) {
+  if (!gtk_init_check(nullptr, nullptr)) {
     return;
   }
   g_toolbar_window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
   gtk_window_set_title(GTK_WINDOW(g_toolbar_window), "marinaMozc");
-  gtk_window_set_decorated(GTK_WINDOW(g_toolbar_window), TRUE);
+  gtk_window_set_decorated(GTK_WINDOW(g_toolbar_window), FALSE);
   gtk_window_set_resizable(GTK_WINDOW(g_toolbar_window), FALSE);
+  gtk_window_set_keep_above(GTK_WINDOW(g_toolbar_window), TRUE);
+  gtk_window_set_skip_taskbar_hint(GTK_WINDOW(g_toolbar_window), TRUE);
+  gtk_window_set_skip_pager_hint(GTK_WINDOW(g_toolbar_window), TRUE);
+  gtk_window_set_type_hint(GTK_WINDOW(g_toolbar_window), GDK_WINDOW_TYPE_HINT_DOCK);
+  gtk_window_set_accept_focus(GTK_WINDOW(g_toolbar_window), FALSE);
+  gtk_window_set_focus_on_map(GTK_WINDOW(g_toolbar_window), FALSE);
+  gtk_container_set_border_width(GTK_CONTAINER(g_toolbar_window), 0);
 
   g_toolbar_box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
   gtk_widget_set_margin_start(g_toolbar_box, 8);
   gtk_widget_set_margin_end(g_toolbar_box, 8);
   gtk_widget_set_margin_top(g_toolbar_box, 6);
   gtk_widget_set_margin_bottom(g_toolbar_box, 6);
-  gtk_window_set_child(GTK_WINDOW(g_toolbar_window), g_toolbar_box);
+  gtk_container_add(GTK_CONTAINER(g_toolbar_window), g_toolbar_box);
 
   // Schema (input mode) label
   g_schema_label = gtk_label_new("\u3042");
   gtk_widget_set_margin_end(g_schema_label, 4);
-  gtk_box_append(GTK_BOX(g_toolbar_box), g_schema_label);
+  gtk_container_add(GTK_CONTAINER(g_toolbar_box), g_schema_label);
 
   // Shin/Kyū toggle
   g_trad_toggle = gtk_toggle_button_new_with_label("Shin/Ky\u016b");
   g_signal_connect(g_trad_toggle, "toggled", G_CALLBACK(OnTraditionalKanjiToggled), nullptr);
-  gtk_box_append(GTK_BOX(g_toolbar_box), g_trad_toggle);
+  gtk_container_add(GTK_CONTAINER(g_toolbar_box), g_trad_toggle);
 
   // Odoriji button
   GtkWidget* btn_odoriji = gtk_button_new_with_label("\u30fb\u30fb Odoriji");
   g_signal_connect(btn_odoriji, "clicked", G_CALLBACK(OnOdorijiClicked), nullptr);
-  gtk_box_append(GTK_BOX(g_toolbar_box), btn_odoriji);
+  gtk_container_add(GTK_CONTAINER(g_toolbar_box), btn_odoriji);
 
   // Half/Full toggle button
   g_half_full_btn = gtk_button_new_with_label("Half/Full");
   g_signal_connect(g_half_full_btn, "clicked", G_CALLBACK(OnHalfFullClicked), nullptr);
-  gtk_box_append(GTK_BOX(g_toolbar_box), g_half_full_btn);
+  gtk_container_add(GTK_CONTAINER(g_toolbar_box), g_half_full_btn);
 }
 
 void ApplyOutputToToolbar(const commands::Output& output) {
@@ -145,7 +153,7 @@ void MozcToolbarShow(MozcEngine* engine) {
   }
   g_engine = engine;
   EnsureToolbarCreated();
-  gtk_widget_show(g_toolbar_window);
+  gtk_widget_show_all(g_toolbar_window);
 }
 
 void MozcToolbarHide() {

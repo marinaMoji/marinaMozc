@@ -59,6 +59,8 @@ const TranslationMap kUTF8JapaneseMap[] = {
     {"Dictionary Tool", "辞書ツール"},
     {"Add Word", "単語登録"},
     {"Input Mode", "入力モード"},
+    {"Show toolbar", "ツールバーを表示"},
+    {"Hide toolbar", "ツールバーを非表示"},
 #ifdef GOOGLE_JAPANESE_INPUT_BUILD
     {"About Mozc", "Google 日本語入力について"},
 #else   // GOOGLE_JAPANESE_INPUT_BUILD

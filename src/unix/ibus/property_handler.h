@@ -47,7 +47,8 @@ class PropertyHandler {
   // This class takes the ownership of translator, but not client.
   PropertyHandler(std::unique_ptr<MessageTranslatorInterface> translator,
                   bool is_active_on_launch,
-                  client::ClientInterface *client);
+                  client::ClientInterface *client,
+                  bool toolbar_available = false);
   ~PropertyHandler();
 
   // Registers current properties into engine.
@@ -86,6 +87,9 @@ class PropertyHandler {
   // Returns original composition mode before.
   commands::CompositionMode GetOriginalCompositionMode() const;
 
+  // Updates the Toolbar menu item label (Show/Hide toolbar). Call after toggling.
+  void UpdateToolbarLabel(IbusEngineWrapper *engine, bool toolbar_visible);
+
  private:
   void UpdateContentTypeImpl(IbusEngineWrapper *engine, bool disabled);
   // Appends composition properties into panel
@@ -95,6 +99,7 @@ class PropertyHandler {
   // Appends Traditional kanji (Shin/Kyu) toggle property into panel
   void AppendTraditionalKanjiPropertyToPanel();
   void AppendOdorijiPalettePropertyToPanel();
+  void AppendToolbarPropertyToPanel();
   // Appends switch properties into panel
   void UpdateCompositionModeIcon(
       IbusEngineWrapper *engine,
@@ -106,6 +111,7 @@ class PropertyHandler {
   IbusPropertyWrapper prop_mozc_tool_;
   IbusPropertyWrapper prop_traditional_kanji_;
   IbusPropertyWrapper prop_odoriji_palette_;
+  IbusPropertyWrapper prop_toolbar_;
   client::ClientInterface *client_;
   std::unique_ptr<MessageTranslatorInterface> translator_;
   commands::CompositionMode original_composition_mode_;

@@ -93,6 +93,16 @@ pkg_config_repository(
 )
 ```
 
+```
+# OpenCC (optional: for Traditional kanji / kyūjitai conversion)
+pkg_config_repository(
+    name = "opencc",
+    packages = ["opencc"],
+)
+```
+
+Install the OpenCC development package so the build can link libopencc and enable the Shin/Kyū (traditional kanji) rewriter: e.g. `libopencc-dev` (Debian/Ubuntu), `opencc-devel` (Fedora), or `opencc` (Arch). If OpenCC is not installed, the build still succeeds; the kyūjitai toggle and menu option will have no effect on conversion output.
+
 💡 `pkg_config_repository` is not a bazel standard functionality. It is a custom
 macro defined in
 [`src/bazel/pkg_config_repository.bzl`](../src/bazel/pkg_config_repository.bzl).
@@ -121,6 +131,50 @@ bazelisk build package --config oss_linux --config release_build
 
 `package` is an alias to build Mozc executables and archive them into
 `mozc.zip`.
+
+### Install and register with IBus (marinaMozc)
+
+After building, install the package and make marinaMozc appear in your input method list:
+
+1. **Install files** (from `src/` directory):
+   ```bash
+   sudo unzip -o bazel-bin/unix/mozc.zip -d /
+   ```
+
+2. **Verify** the component and engine are in place:
+   ```bash
+   test -f /usr/share/ibus/component/marinamozc.xml && echo "Component OK"
+   test -x /usr/lib/ibus-marinamozc/ibus-engine-marinamozc && echo "Engine OK"
+   ```
+
+3. **Reload IBus** so it picks up the new component:
+   ```bash
+   ibus write-cache
+   ibus restart
+   ```
+   If you use a desktop session, logging out and back in is an alternative.
+
+4. **Add marinaMozc** in your system input settings:
+   - **GNOME:** Settings → Keyboard → Input Sources → Add (+) → select **Japanese** → choose **marinaMozc** (or “marinaMozc (Japanese Input Method)”).
+   - **Other (IBus):** Add input method and pick the engine named **marinaMozc** / **Japanese (marinaMozc)**.
+
+If it still does not appear, confirm that `ibus-daemon` is running and that no errors show when running `ibus engine` or when opening the input method configuration.
+
+**Display name:** marinaMozc uses its own config directory (`~/.config/marinamozc/`), so it appears as **Japanese (marinaMozc)** and does not share settings with stock Mozc. After reinstalling, run `ibus write-cache && ibus restart` and add the input source again; the new config will show "marinaMozc" in the list.
+
+### Usage and known behavior
+
+- **Toolbar:** When you focus a text field, the marinaMozc toolbar window shows the current schema (あ, ア, etc.), Shin/Kyū (traditional kanji) toggle, Odoriji button, and Half/Full button. If the window was empty before, rebuild and reinstall so the fix (showing all widgets) is applied.
+
+- **Keyboard shortcuts** (from the keymap, e.g. MS-IME style):
+  - **Ctrl+Shift+2** – Odoriji (iteration marks) palette
+  - **Ctrl+Shift+3** – Toggle half/full width
+  - **Ctrl+Shift+F** – Toggle traditional (kyūjitai) / modern (shinjitai) kanji  
+  If these do nothing, your desktop or IBus may be capturing them; use the **IBus menu** (click the icon in the panel) or the **toolbar** instead.
+
+- **Odoriji from the menu:** The "Odoriji (iteration marks)" menu item works when the engine is active (e.g. focus in a text field). If it only works after you start typing, click inside a text field first so the engine has focus, then open the menu and choose Odoriji.
+
+- **Traditional kanji (Shin/Kyū):** Toggle via the toolbar button or the "Traditional kanji (Kyūjitai)" option in the IBus menu. The effect applies to the **next conversion**; reconvert or type again after toggling to see kyūjitai/shinjitai. Requires the build to have OpenCC enabled (install `libopencc-dev` or equivalent before building; see Packages above).
 
 ### Clean Bazel's build cache
 

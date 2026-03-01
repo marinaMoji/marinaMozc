@@ -2412,7 +2412,8 @@ bool Session::ToggleFullHalfWidth(commands::Command* command) {
     if (transliteration::T13n::IsInHalfAsciiTypes(mode)) {
       return ConvertToFullASCII(command);
     }
-    return OutputFromState(command);
+    OutputFromState(command);
+    return true;
   }
   if (context_->state() == ImeContext::COMPOSITION ||
       context_->state() == ImeContext::PRECOMPOSITION) {
@@ -2429,7 +2430,8 @@ bool Session::ToggleFullHalfWidth(commands::Command* command) {
       return true;
     }
   }
-  return OutputFromState(command);
+  OutputFromState(command);
+  return true;
 }
 
 bool Session::DeleteCandidateFromHistory(commands::Command* command) {

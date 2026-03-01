@@ -280,12 +280,16 @@ std::string UserProfileDirectoryImpl::GetUserProfileDirectory() const {
 #endif  //  GOOGLE_JAPANESE_INPUT_BUILD
 
 #elif defined(__linux__)
-  // 1. If "$HOME/.mozc" already exists,
-  //    use "$HOME/.mozc" for backward compatibility.
-  // 2. If $XDG_CONFIG_HOME is defined
-  //    use "$XDG_CONFIG_HOME/mozc".
-  // 3. Otherwise
-  //    use "$HOME/.config/mozc" as the default value of $XDG_CONFIG_HOME
+  // marinaMozc uses a separate config dir so it doesn't share with stock Mozc.
+#ifdef MARINAMOZC
+  const char* profile_dir_name = "marinamozc";
+#else
+  const char* profile_dir_name = "mozc";
+#endif
+  // 1. If "$HOME/.<profile_dir_name>" already exists,
+  //    use it for backward compatibility.
+  // 2. If $XDG_CONFIG_HOME is defined, use "$XDG_CONFIG_HOME/<profile_dir_name>".
+  // 3. Otherwise use "$HOME/.config/<profile_dir_name>"
   // https://specifications.freedesktop.org/basedir-spec/basedir-spec-latest.html
   const std::string home = Environ::GetEnv("HOME");
   if (home.empty()) {
@@ -296,19 +300,19 @@ std::string UserProfileDirectoryImpl::GetUserProfileDirectory() const {
         << "Can't get passwd entry for uid " << uid << ".";
     CHECK_LT(0, strlen(pw.pw_dir))
         << "Home directory for uid " << uid << " is not set.";
-    return FileUtil::JoinPath(pw.pw_dir, ".mozc");
+    return FileUtil::JoinPath(pw.pw_dir, std::string(".") + profile_dir_name);
   }
 
-  std::string old_dir = FileUtil::JoinPath(home, ".mozc");
+  std::string old_dir = FileUtil::JoinPath(home, std::string(".") + profile_dir_name);
   if (FileUtil::DirectoryExists(old_dir).ok()) {
     return old_dir;
   }
 
   const std::string xdg_config_home = Environ::GetEnv("XDG_CONFIG_HOME");
   if (!xdg_config_home.empty()) {
-    return FileUtil::JoinPath(xdg_config_home, "mozc");
+    return FileUtil::JoinPath(xdg_config_home, profile_dir_name);
   }
-  return FileUtil::JoinPath(home, ".config/mozc");
+  return FileUtil::JoinPath(home, std::string(".config/") + profile_dir_name);
 
 #else  // Supported platforms
 #error Undefined target platform.
