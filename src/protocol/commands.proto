@@ -453,6 +453,15 @@ message SessionCommand {
     // Note: This command resets the internal states (history segments) of the
     // converter.
     REQUEST_NWP = 27;
+
+    // Toggle traditional (kyūjitai) / modern (shinjitai) kanji conversion.
+    TOGGLE_TRADITIONAL_KANJI = 28;
+
+    // Open the odoriji (iteration marks) palette (same as Ctrl+Shift+2).
+    SHOW_ODORIJI_PALETTE = 29;
+
+    // Toggle half-width / full-width (e.g. alphanumeric). Same as Ctrl+Shift+3.
+    TOGGLE_FULL_HALF_WIDTH = 30;
   }
   required CommandType type = 1;
 

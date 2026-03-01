@@ -45,6 +45,13 @@ load("//bazel:run_build_tool.bzl", "mozc_run_build_tool")
 package(default_visibility = ["//visibility:private"])
 
 mozc_cc_library(
+    name = "odoriji_palette",
+    srcs = ["odoriji_palette.cc"],
+    hdrs = ["odoriji_palette.h"],
+    deps = ["//protocol:commands_cc_proto"],
+)
+
+mozc_cc_library(
     name = "session",
     srcs = ["session.cc"],
     hdrs = ["session.h"],
@@ -55,6 +62,7 @@ mozc_cc_library(
         ":ime_context",
         ":key_event_transformer",
         ":keymap",
+        ":odoriji_palette",
         "//base:clock",
         "//base:util",
         "//composer",

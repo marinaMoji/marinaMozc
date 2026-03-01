@@ -72,6 +72,10 @@ struct PrecompositionState {
     INSERT_HALF_SPACE,         // Input half-width space
     INSERT_FULL_SPACE,         // Input full-width space
     TOGGLE_ALPHANUMERIC_MODE,  // toggle AlphaNumeric and Hiragana mode.
+    TOGGLE_TRADITIONAL_KANJI,  // toggle traditional (kyūjitai) / modern (shinjitai) kanji.
+    SHOW_ODORIJI_PALETTE,      // show iteration marks (々ゝゞ…) in candidate window
+    INSERT_ODORIJI_DEFAULT,    // insert session default odoriji (e.g. 々) without opening palette
+    TOGGLE_FULL_HALF_WIDTH,    // toggle half/full width
     // Switch input mode.
     COMPOSITION_MODE_HIRAGANA,
     COMPOSITION_MODE_FULL_KATAKANA,
@@ -138,6 +142,10 @@ struct CompositionState {
     TRANSLATE_FULL_ASCII,      // F9
     TRANSLATE_HALF_ASCII,      // F10
     TOGGLE_ALPHANUMERIC_MODE,  // toggle AlphaNumeric and Hiragana mode.
+    TOGGLE_TRADITIONAL_KANJI,  // toggle traditional (kyūjitai) / modern (shinjitai) kanji.
+    SHOW_ODORIJI_PALETTE,      // show iteration marks (々ゝゞ…) in candidate window
+    INSERT_ODORIJI_DEFAULT,    // insert session default odoriji (e.g. 々) without opening palette
+    TOGGLE_FULL_HALF_WIDTH,    // toggle half/full width
     // Switch input mode.
     COMPOSITION_MODE_HIRAGANA,
     COMPOSITION_MODE_FULL_KATAKANA,
@@ -189,6 +197,10 @@ struct ConversionState {
     TRANSLATE_FULL_ASCII,      // F9
     TRANSLATE_HALF_ASCII,      // F10
     TOGGLE_ALPHANUMERIC_MODE,  // toggle AlphaNumeric and Hiragana mode.
+    TOGGLE_TRADITIONAL_KANJI,  // toggle traditional (kyūjitai) / modern (shinjitai) kanji.
+    SHOW_ODORIJI_PALETTE,     // show iteration marks (々ゝゞ…) in candidate window
+    INSERT_ODORIJI_DEFAULT,   // insert session default odoriji without opening palette
+    TOGGLE_FULL_HALF_WIDTH,   // toggle half/full width
     // Switch input mode.
     COMPOSITION_MODE_HIRAGANA,
     COMPOSITION_MODE_FULL_KATAKANA,

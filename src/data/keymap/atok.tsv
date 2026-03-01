@@ -57,6 +57,10 @@ Conversion	Ctrl n	CommitOnlyFirstSegment
 Conversion	Ctrl o	ConvertToHalfWidth
 Conversion	Ctrl p	ConvertToFullAlphanumeric
 Conversion	Ctrl Right	SegmentFocusLast
+Conversion	Ctrl Shift 1	InsertOdorijiDefault
+Conversion	Ctrl Shift 2	ShowOdorijiPalette
+Conversion	Ctrl Shift 3	ToggleFullHalfWidth
+Conversion	Ctrl Shift F	ToggleTraditionalKanji
 Conversion	Ctrl Shift Left	SegmentWidthShrink
 Conversion	Ctrl Shift Right	SegmentWidthExpand
 Conversion	Ctrl Space	ConvertNext

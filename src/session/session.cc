@@ -45,6 +45,7 @@
 #include "absl/time/time.h"
 #include "base/clock.h"
 #include "base/util.h"
+#include "config/config_handler.h"
 #include "composer/composer.h"
 #include "composer/key_event_util.h"
 #include "composer/table.h"
@@ -55,6 +56,7 @@
 #include "session/ime_context.h"
 #include "session/key_event_transformer.h"
 #include "session/keymap.h"
+#include "session/odoriji_palette.h"
 #include "transliteration/transliteration.h"
 
 #ifdef __APPLE__
@@ -402,6 +404,15 @@ bool Session::SendCommand(commands::Command* command) {
       }
       break;
     }
+    case commands::SessionCommand::TOGGLE_TRADITIONAL_KANJI:
+      result = ToggleTraditionalKanji(command);
+      break;
+    case commands::SessionCommand::SHOW_ODORIJI_PALETTE:
+      result = ShowOdorijiPalette(command);
+      break;
+    case commands::SessionCommand::TOGGLE_FULL_HALF_WIDTH:
+      result = ToggleFullHalfWidth(command);
+      break;
     default:
       LOG(WARNING) << "Unknown command" << *command;
       result = DoNothing(command);
@@ -514,6 +525,15 @@ bool Session::SendKey(commands::Command* command) {
   // To support indirect IME on/off by using KeyEvent::activated, use effective
   // state instead of directly using context_->state().
   HandleIndirectImeOnOff(command);
+
+  if (odoriji_palette_visible_ &&
+      OdorijiPalette::HandleKey(command->input().key(), command,
+                                &odoriji_palette_visible_,
+                                &odoriji_focused_index_,
+                                &odoriji_default_index_)) {
+    Output(command);
+    return true;
+  }
 
   bool result = false;
   switch (context_->state()) {
@@ -649,6 +669,14 @@ bool Session::SendKeyPrecompositionState(commands::Command* command) {
       return InsertSpaceFullWidth(command);
     case keymap::PrecompositionState::TOGGLE_ALPHANUMERIC_MODE:
       return ToggleAlphanumericMode(command);
+    case keymap::PrecompositionState::TOGGLE_TRADITIONAL_KANJI:
+      return ToggleTraditionalKanji(command);
+    case keymap::PrecompositionState::SHOW_ODORIJI_PALETTE:
+      return ShowOdorijiPalette(command);
+    case keymap::PrecompositionState::INSERT_ODORIJI_DEFAULT:
+      return InsertOdorijiDefault(command);
+    case keymap::PrecompositionState::TOGGLE_FULL_HALF_WIDTH:
+      return ToggleFullHalfWidth(command);
     case keymap::PrecompositionState::REVERT:
       return Revert(command);
     case keymap::PrecompositionState::UNDO:
@@ -822,6 +850,14 @@ bool Session::SendKeyCompositionState(commands::Command* command) {
 
     case keymap::CompositionState::TOGGLE_ALPHANUMERIC_MODE:
       return ToggleAlphanumericMode(command);
+    case keymap::CompositionState::TOGGLE_TRADITIONAL_KANJI:
+      return ToggleTraditionalKanji(command);
+    case keymap::CompositionState::SHOW_ODORIJI_PALETTE:
+      return ShowOdorijiPalette(command);
+    case keymap::CompositionState::INSERT_ODORIJI_DEFAULT:
+      return InsertOdorijiDefault(command);
+    case keymap::CompositionState::TOGGLE_FULL_HALF_WIDTH:
+      return ToggleFullHalfWidth(command);
 
     case keymap::CompositionState::COMPOSITION_MODE_HIRAGANA:
       return CompositionModeHiragana(command);
@@ -967,6 +1003,15 @@ bool Session::SendKeyConversionState(commands::Command* command) {
 
     case keymap::ConversionState::TOGGLE_ALPHANUMERIC_MODE:
       return ToggleAlphanumericMode(command);
+
+    case keymap::ConversionState::TOGGLE_TRADITIONAL_KANJI:
+      return ToggleTraditionalKanji(command);
+    case keymap::ConversionState::SHOW_ODORIJI_PALETTE:
+      return ShowOdorijiPalette(command);
+    case keymap::ConversionState::INSERT_ODORIJI_DEFAULT:
+      return InsertOdorijiDefault(command);
+    case keymap::ConversionState::TOGGLE_FULL_HALF_WIDTH:
+      return ToggleFullHalfWidth(command);
 
     case keymap::ConversionState::COMPOSITION_MODE_HIRAGANA:
       return CompositionModeHiragana(command);
@@ -1362,6 +1407,12 @@ bool Session::SelectCandidate(commands::Command* command) {
 }
 
 bool Session::CommitCandidate(commands::Command* command) {
+  if (OdorijiPalette::TryCommitCandidate(command, &odoriji_palette_visible_,
+                                         &odoriji_default_index_)) {
+    Output(command);
+    return true;
+  }
+
   if (!(context_->state() & (ImeContext::COMPOSITION | ImeContext::CONVERSION |
                              ImeContext::PRECOMPOSITION))) {
     return false;
@@ -2320,6 +2371,67 @@ bool Session::ToggleAlphanumericMode(commands::Command* command) {
   return true;
 }
 
+bool Session::ToggleTraditionalKanji(commands::Command* command) {
+  command->mutable_output()->set_consumed(true);
+  config::Config config = config::ConfigHandler::GetCopiedConfig();
+  config.set_use_traditional_kanji(!config.use_traditional_kanji());
+  config::ConfigHandler::SetConfig(std::move(config));
+  context_->SetConfig(config::ConfigHandler::GetSharedConfig());
+  // Return updated config so clients (e.g. IBus property) can sync UI state.
+  *command->mutable_output()->mutable_config() =
+      config::ConfigHandler::GetCopiedConfig();
+  OutputFromState(command);
+  return true;
+}
+
+bool Session::ShowOdorijiPalette(commands::Command* command) {
+  command->mutable_output()->set_consumed(true);
+  OdorijiPalette::Show(&odoriji_palette_visible_, &odoriji_focused_index_);
+  Output(command);
+  return true;
+}
+
+bool Session::InsertOdorijiDefault(commands::Command* command) {
+  command->mutable_output()->set_consumed(true);
+  const size_t idx = static_cast<size_t>(odoriji_default_index_);
+  commands::Result* result = command->mutable_output()->mutable_result();
+  result->set_type(commands::Result::STRING);
+  result->set_value(OdorijiPalette::GetCharacter(idx));
+  OutputFromState(command);
+  return true;
+}
+
+bool Session::ToggleFullHalfWidth(commands::Command* command) {
+  command->mutable_output()->set_consumed(true);
+  const transliteration::TransliterationType mode =
+      context_->composer().GetOutputMode();
+  if (context_->state() == ImeContext::CONVERSION) {
+    if (transliteration::T13n::IsInFullAsciiTypes(mode)) {
+      return ConvertToHalfASCII(command);
+    }
+    if (transliteration::T13n::IsInHalfAsciiTypes(mode)) {
+      return ConvertToFullASCII(command);
+    }
+    return OutputFromState(command);
+  }
+  if (context_->state() == ImeContext::COMPOSITION ||
+      context_->state() == ImeContext::PRECOMPOSITION) {
+    if (transliteration::T13n::IsInFullAsciiTypes(mode)) {
+      context_->mutable_composer()->SetOutputMode(
+          transliteration::T13n::ToggleHalfAsciiTypes(mode));
+      OutputComposition(command);
+      return true;
+    }
+    if (transliteration::T13n::IsInHalfAsciiTypes(mode)) {
+      context_->mutable_composer()->SetOutputMode(
+          transliteration::T13n::ToggleFullAsciiTypes(mode));
+      OutputComposition(command);
+      return true;
+    }
+  }
+  return OutputFromState(command);
+}
+
 bool Session::DeleteCandidateFromHistory(commands::Command* command) {
   std::optional<int> id = std::nullopt;
   if (command->input().has_command() && command->input().command().has_id()) {
@@ -2711,6 +2823,10 @@ void Session::Output(commands::Command* command) {
   OutputMode(command);
   context_->mutable_converter()->PopOutput(context_->composer(),
                                            command->mutable_output());
+  if (odoriji_palette_visible_) {
+    OdorijiPalette::OverlayOutput(command->mutable_output(),
+                                  odoriji_focused_index_);
+  }
 }
 
 void Session::OutputMode(commands::Command* command) const {

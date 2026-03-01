@@ -20,6 +20,10 @@ Composition	Ctrl o	ConvertToHalfWidth
 Composition	Ctrl p	ConvertToFullAlphanumeric
 Composition	Ctrl Right	MoveCursorToEnd
 Composition	Ctrl s	MoveCursorLeft
+Composition	Ctrl Shift 1	InsertOdorijiDefault
+Composition	Ctrl Shift 2	ShowOdorijiPalette
+Composition	Ctrl Shift 3	ToggleFullHalfWidth
+Composition	Ctrl Shift F	ToggleTraditionalKanji
 Composition	Ctrl Shift Space	InsertFullSpace
 Composition	Ctrl Space	InsertHalfSpace
 Composition	Ctrl t	ConvertToHalfAlphanumeric
@@ -81,6 +85,10 @@ Conversion	Ctrl o	ConvertToHalfWidth
 Conversion	Ctrl p	ConvertToFullAlphanumeric
 Conversion	Ctrl Right	SegmentFocusLast
 Conversion	Ctrl s	SegmentFocusLeft
+Conversion	Ctrl Shift 1	InsertOdorijiDefault
+Conversion	Ctrl Shift 2	ShowOdorijiPalette
+Conversion	Ctrl Shift 3	ToggleFullHalfWidth
+Conversion	Ctrl Shift F	ToggleTraditionalKanji
 Conversion	Ctrl Shift Space	InsertFullSpace
 Conversion	Ctrl Space	InsertHalfSpace
 Conversion	Ctrl t	ConvertToHalfAlphanumeric
@@ -141,6 +149,10 @@ DirectInput	ON	IMEOn
 Precomposition	ASCII	InsertCharacter
 Precomposition	Backspace	Revert
 Precomposition	Ctrl Backspace	Undo
+Precomposition	Ctrl Shift 1	InsertOdorijiDefault
+Precomposition	Ctrl Shift 2	ShowOdorijiPalette
+Precomposition	Ctrl Shift 3	ToggleFullHalfWidth
+Precomposition	Ctrl Shift F	ToggleTraditionalKanji
 Precomposition	Ctrl Shift Space	InsertFullSpace
 Precomposition	Eisu	ToggleAlphanumericMode
 Precomposition	Hankaku/Zenkaku	IMEOff

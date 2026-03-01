@@ -498,6 +498,14 @@ void KeyMapManager::InitCommandData() {
                                 PrecompositionState::INSERT_FULL_SPACE);
   RegisterPrecompositionCommand("ToggleAlphanumericMode",
                                 PrecompositionState::TOGGLE_ALPHANUMERIC_MODE);
+  RegisterPrecompositionCommand("ToggleTraditionalKanji",
+                                PrecompositionState::TOGGLE_TRADITIONAL_KANJI);
+  RegisterPrecompositionCommand("ShowOdorijiPalette",
+                                PrecompositionState::SHOW_ODORIJI_PALETTE);
+  RegisterPrecompositionCommand("InsertOdorijiDefault",
+                                PrecompositionState::INSERT_ODORIJI_DEFAULT);
+  RegisterPrecompositionCommand("ToggleFullHalfWidth",
+                                PrecompositionState::TOGGLE_FULL_HALF_WIDTH);
   if (kCompositionModeXCommandSupported) {
     RegisterPrecompositionCommand(
         kCommandStringCompositionModeHiragana,
@@ -614,6 +622,14 @@ void KeyMapManager::InitCommandData() {
                              CompositionState::TRANSLATE_HALF_ASCII);
   RegisterCompositionCommand("ToggleAlphanumericMode",
                              CompositionState::TOGGLE_ALPHANUMERIC_MODE);
+  RegisterCompositionCommand("ToggleTraditionalKanji",
+                             CompositionState::TOGGLE_TRADITIONAL_KANJI);
+  RegisterCompositionCommand("ShowOdorijiPalette",
+                             CompositionState::SHOW_ODORIJI_PALETTE);
+  RegisterCompositionCommand("InsertOdorijiDefault",
+                             CompositionState::INSERT_ODORIJI_DEFAULT);
+  RegisterCompositionCommand("ToggleFullHalfWidth",
+                             CompositionState::TOGGLE_FULL_HALF_WIDTH);
   if (kCompositionModeXCommandSupported) {
     RegisterCompositionCommand(kCommandStringCompositionModeHiragana,
                                CompositionState::COMPOSITION_MODE_HIRAGANA);
@@ -697,6 +713,14 @@ void KeyMapManager::InitCommandData() {
                             ConversionState::SWITCH_KANA_TYPE);
   RegisterConversionCommand("ToggleAlphanumericMode",
                             ConversionState::TOGGLE_ALPHANUMERIC_MODE);
+  RegisterConversionCommand("ToggleTraditionalKanji",
+                            ConversionState::TOGGLE_TRADITIONAL_KANJI);
+  RegisterConversionCommand("ShowOdorijiPalette",
+                            ConversionState::SHOW_ODORIJI_PALETTE);
+  RegisterConversionCommand("InsertOdorijiDefault",
+                            ConversionState::INSERT_ODORIJI_DEFAULT);
+  RegisterConversionCommand("ToggleFullHalfWidth",
+                            ConversionState::TOGGLE_FULL_HALF_WIDTH);
   RegisterConversionCommand("DisplayAsHiragana",
                             ConversionState::DISPLAY_AS_HIRAGANA);
   RegisterConversionCommand("DisplayAsFullKatakana",

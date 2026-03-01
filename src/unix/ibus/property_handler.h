@@ -92,6 +92,9 @@ class PropertyHandler {
   void AppendCompositionPropertyToPanel();
   // Appends tool properties into panel
   void AppendToolPropertyToPanel();
+  // Appends Traditional kanji (Shin/Kyu) toggle property into panel
+  void AppendTraditionalKanjiPropertyToPanel();
+  void AppendOdorijiPalettePropertyToPanel();
   // Appends switch properties into panel
   void UpdateCompositionModeIcon(
       IbusEngineWrapper *engine,
@@ -101,6 +104,8 @@ class PropertyHandler {
   IbusPropListWrapper prop_root_;
   IbusPropertyWrapper prop_composition_mode_;
   IbusPropertyWrapper prop_mozc_tool_;
+  IbusPropertyWrapper prop_traditional_kanji_;
+  IbusPropertyWrapper prop_odoriji_palette_;
   client::ClientInterface *client_;
   std::unique_ptr<MessageTranslatorInterface> translator_;
   commands::CompositionMode original_composition_mode_;

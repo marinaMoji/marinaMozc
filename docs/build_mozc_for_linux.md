@@ -134,22 +134,27 @@ bazelisk clean --expunge
 
 ### How to customize installation locations
 
-Here is a table of contents in `mozc.zip` and their actual build target names.
+This fork is branded **marinaMozc** and uses distinct paths so it can be
+installed **next to** stock Mozc (e.g. for testing). The IBus component is
+registered as **marinaMozc** and uses `marinamozc.xml` so it does not
+overwrite `mozc.xml`.
 
-build target                     | installation location
--------------------------------- | ---------------------
-`//server:mozc_server`           | `/usr/lib/mozc/mozc_server`
-`//gui/tool:mozc_tool`           | `/usr/lib/mozc/mozc_tool`
-`//renderer:mozc_renderer`       | `/usr/lib/mozc/mozc_renderer`
-`//unix/ibus/ibus_mozc`          | `/usr/lib/ibus-mozc/ibus-engine-mozc`
-`//unix/ibus:gen_mozc_xml`       | `/usr/share/ibus/component/mozc.xml`
-`//unix:icons`                   | `/usr/share/ibus-mozc/...`
-`//unix:icons`                   | `/usr/share/icons/mozc/...`
+Here is a table of contents in `mozc.zip` and their installation locations for
+marinaMozc:
+
+build target                     | installation location (marinaMozc)
+-------------------------------- | ----------------------------------
+`//server:mozc_server`           | `/usr/lib/marinamozc/mozc_server`
+`//gui/tool:mozc_tool`           | `/usr/lib/marinamozc/mozc_tool`
+`//renderer:mozc_renderer`       | `/usr/lib/marinamozc/mozc_renderer`
+`//unix/ibus/ibus_mozc`          | `/usr/lib/ibus-marinamozc/ibus-engine-marinamozc`
+`//unix/ibus:gen_mozc_xml`       | `/usr/share/ibus/component/marinamozc.xml`
+`//unix:icons`                   | `/usr/share/ibus-marinamozc/...`
+`//unix:icons`                   | `/usr/share/icons/marinamozc/...`
 `//unix/emacs:mozc.el`           | `/usr/share/emacs/site-lisp/emacs-mozc/mozc.el`
 `//unix/emacs:mozc_emacs_helper` | `/usr/bin/mozc_emacs_helper`
 
-To customize above installation locations, modify
-[`src/config.bzl`](../src/config.bzl).
+To customize installation locations, modify [`src/config.bzl`](../src/config.bzl).
 
 💡 The following command makes the specified file untracked by Git.
 

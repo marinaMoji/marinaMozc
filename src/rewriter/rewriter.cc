@@ -51,6 +51,7 @@
 #include "rewriter/ivs_variants_rewriter.h"
 #include "rewriter/language_aware_rewriter.h"
 #include "rewriter/number_rewriter.h"
+#include "rewriter/opencc_rewriter.h"
 #include "rewriter/remove_redundant_candidate_rewriter.h"
 #include "rewriter/single_kanji_rewriter.h"
 #include "rewriter/small_letter_rewriter.h"
@@ -144,6 +145,7 @@ Rewriter::Rewriter(const engine::Modules& modules) {
   AddRewriter(std::make_unique<TransliterationRewriter>(pos_matcher));
   AddRewriter(std::make_unique<EnglishVariantsRewriter>(pos_matcher));
   AddRewriter(std::make_unique<NumberRewriter>(data_manager));
+  AddRewriter(std::make_unique<OpenccRewriter>());
   AddRewriter(CollocationRewriter::Create(data_manager));
   AddRewriter(std::make_unique<SingleKanjiRewriter>(pos_matcher,
                                                     single_kanji_dictionary));

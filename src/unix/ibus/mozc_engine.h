@@ -97,6 +97,10 @@ class MozcEngine : public EngineInterface {
   void SetContentType(IbusEngineWrapper *engine, uint purpose,
                       uint hints) override;
 
+  // Called by the GTK toolbar when a button is clicked. Sends the session
+  // command and updates UI using the last focused engine.
+  void SendToolbarSessionCommand(commands::SessionCommand::CommandType type);
+
  private:
   // Updates the preedit text and the candidate window and inserts result
   // based on the content of |output|.
@@ -149,6 +153,9 @@ class MozcEngine : public EngineInterface {
   // Unique IDs of candidates that are currently shown.
   std::vector<int32_t> unique_candidate_ids_;
   IbusConfig ibus_config_;
+
+  // Last focused IBus engine; used by toolbar to send commands and update UI.
+  IBusEngine *current_engine_ = nullptr;
 
   friend class MozcEngineTestPeer;
 };

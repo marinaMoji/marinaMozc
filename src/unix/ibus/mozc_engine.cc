@@ -33,6 +33,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <map>
 #include <memory>
 #include <optional>
@@ -64,6 +65,7 @@
 #include "unix/ibus/key_event_handler.h"
 #include "unix/ibus/message_translator.h"
 #include "unix/ibus/path_util.h"
+#include "unix/ibus/mozc_toolbar.h"
 #include "unix/ibus/preedit_handler.h"
 #include "unix/ibus/property_handler.h"
 #include "unix/ibus/surrounding_text_util.h"
@@ -341,11 +343,18 @@ void MozcEngine::Enable(IbusEngineWrapper *engine) {
 }
 
 void MozcEngine::FocusIn(IbusEngineWrapper *engine) {
+  current_engine_ = engine->GetEngine();
   property_handler_->Register(engine);
   UpdatePreeditMethod();
+  if (MozcToolbarAvailable()) {
+    MozcToolbarShow(this);
+  }
 }
 
 void MozcEngine::FocusOut(IbusEngineWrapper *engine) {
+  if (MozcToolbarAvailable()) {
+    MozcToolbarHide();
+  }
   GetCandidateWindowHandler(engine)->Hide(engine);
   property_handler_->ResetContentType(engine);
 
@@ -419,6 +428,17 @@ bool MozcEngine::ProcessKeyEvent(IbusEngineWrapper *engine, uint keyval,
 void MozcEngine::PropertyActivate(IbusEngineWrapper *engine,
                                   const char *property_name,
                                   uint property_state) {
+  // Odoriji palette button: same as Ctrl+Shift+2 (open iteration marks palette).
+  if (property_name != nullptr &&
+      strcmp(property_name, "Option.OdorijiPalette") == 0) {
+    commands::SessionCommand command;
+    command.set_type(commands::SessionCommand::SHOW_ODORIJI_PALETTE);
+    commands::Output output;
+    if (client_->SendCommand(command, &output)) {
+      UpdateAll(engine, output);
+    }
+    return;
+  }
   property_handler_->ProcessPropertyActivate(engine, property_name,
                                              property_state);
 }
@@ -454,6 +474,21 @@ void MozcEngine::SetContentType(IbusEngineWrapper *engine, uint purpose,
   }
 }
 
+void MozcEngine::SendToolbarSessionCommand(
+    commands::SessionCommand::CommandType type) {
+  commands::SessionCommand command;
+  command.set_type(type);
+  commands::Output output;
+  if (!client_->SendCommand(command, &output)) {
+    LOG(ERROR) << "SendToolbarSessionCommand failed";
+    return;
+  }
+  if (current_engine_ != nullptr) {
+    IbusEngineWrapper wrapper(current_engine_);
+    UpdateAll(&wrapper, output);
+  }
+}
+
 bool MozcEngine::UpdateAll(IbusEngineWrapper *engine,
                            const commands::Output &output) {
   UpdateDeletionRange(engine, output);
@@ -463,6 +498,10 @@ bool MozcEngine::UpdateAll(IbusEngineWrapper *engine,
   UpdateCandidateIDMapping(output);
 
   property_handler_->Update(engine, output);
+
+  if (MozcToolbarAvailable()) {
+    MozcToolbarUpdate(output);
+  }
 
   LaunchTool(output);
   ExecuteCallback(engine, output);

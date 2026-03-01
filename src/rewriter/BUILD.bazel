@@ -281,6 +281,23 @@ mozc_cc_test(
     ],
 )
 
+# OpenCC rewriter: when MOZC_USE_OPENCC is defined and opencc is linked,
+# converts candidates to kyūjitai via jp2t. Otherwise no-op.
+mozc_cc_library(
+    name = "opencc_rewriter",
+    srcs = ["opencc_rewriter.cc"],
+    hdrs = ["opencc_rewriter.h"],
+    deps = [
+        ":rewriter_interface",
+        "//converter:segments",
+        "//protocol:config_cc_proto",
+        "//request:conversion_request",
+        "@com_google_absl//absl/log:check",
+        "@com_google_absl//absl/strings",
+    ],
+    alwayslink = 1,
+)
+
 mozc_cc_library(
     name = "number_rewriter",
     srcs = [
@@ -1529,6 +1546,7 @@ mozc_cc_library(
         ":language_aware_rewriter",
         ":merger_rewriter",
         ":number_rewriter",
+        ":opencc_rewriter",
         ":remove_redundant_candidate_rewriter",
         ":single_kanji_rewriter",
         ":small_letter_rewriter",

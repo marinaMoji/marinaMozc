@@ -191,6 +191,8 @@ PropertyHandler::PropertyHandler(
 
   AppendCompositionPropertyToPanel();
   AppendToolPropertyToPanel();
+  AppendTraditionalKanjiPropertyToPanel();
+  AppendOdorijiPalettePropertyToPanel();
 
   // We have to sink |prop_root_| as well so ibus_engine_register_properties()
   // in FocusIn() does not destruct it.
@@ -203,6 +205,11 @@ PropertyHandler::~PropertyHandler() {
 
   // The ref counter will drop to one.
   prop_mozc_tool_.Unref();
+
+  // The ref counter will drop to one.
+  prop_traditional_kanji_.Unref();
+
+  prop_odoriji_palette_.Unref();
 
   // Destroy all objects under the root.
   prop_root_.Unref();
@@ -319,6 +326,26 @@ void PropertyHandler::AppendToolPropertyToPanel() {
   prop_root_.Append(&prop_mozc_tool_);
 }
 
+void PropertyHandler::AppendTraditionalKanjiPropertyToPanel() {
+  const std::string label =
+      translator_->MaybeTranslate("Traditional kanji (Kyūjitai)");
+  prop_traditional_kanji_.Initialize(
+      "Option.TraditionalKanji", IBUS_PROP_TYPE_TOGGLE, label, "" /* icon */,
+      PROP_STATE_UNCHECKED, nullptr);
+  prop_traditional_kanji_.RefSink();
+  prop_root_.Append(&prop_traditional_kanji_);
+}
+
+void PropertyHandler::AppendOdorijiPalettePropertyToPanel() {
+  const std::string label =
+      translator_->MaybeTranslate("Odoriji (iteration marks)");
+  prop_odoriji_palette_.Initialize(
+      "Option.OdorijiPalette", IBUS_PROP_TYPE_NORMAL, label, "" /* icon */,
+      PROP_STATE_UNCHECKED, nullptr);
+  prop_odoriji_palette_.RefSink();
+  prop_root_.Append(&prop_odoriji_palette_);
+}
+
 void PropertyHandler::Update(IbusEngineWrapper *engine,
                              const commands::Output &output) {
   if (IsDisabled()) {
@@ -335,6 +362,13 @@ void PropertyHandler::Update(IbusEngineWrapper *engine,
     }
     is_activated_ = output.status().activated();
     original_composition_mode_ = output.status().mode();
+  }
+
+  if (prop_traditional_kanji_.IsInitialized() && output.has_config()) {
+    const bool use_traditional = output.config().use_traditional_kanji();
+    prop_traditional_kanji_.SetState(use_traditional ? PROP_STATE_CHECKED
+                                                     : PROP_STATE_UNCHECKED);
+    engine->UpdateProperty(&prop_traditional_kanji_);
   }
 }
 
@@ -411,6 +445,22 @@ void PropertyHandler::ProcessPropertyActivate(IbusEngineWrapper *engine,
                                               const char *property_name,
                                               uint property_state) {
   if (IsDisabled()) {
+    return;
+  }
+
+  if (prop_traditional_kanji_.IsInitialized() &&
+      prop_traditional_kanji_.GetKey() == property_name) {
+    commands::SessionCommand command;
+    command.set_type(commands::SessionCommand::TOGGLE_TRADITIONAL_KANJI);
+    commands::Output output;
+    if (client_->SendCommand(command, &output)) {
+      if (output.has_config()) {
+        const bool use_traditional = output.config().use_traditional_kanji();
+        prop_traditional_kanji_.SetState(use_traditional ? PROP_STATE_CHECKED
+                                                        : PROP_STATE_UNCHECKED);
+        engine->UpdateProperty(&prop_traditional_kanji_);
+      }
+    }
     return;
   }
 

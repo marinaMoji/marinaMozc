@@ -54,6 +54,10 @@ Composition	VirtualLeft	MoveCursorLeft
 Composition	VirtualRight	MoveCursorRight
 Composition	VirtualEnter	Commit
 Conversion	Backspace	Cancel
+Conversion	Ctrl Shift 1	InsertOdorijiDefault
+Conversion	Ctrl Shift 2	ShowOdorijiPalette
+Conversion	Ctrl Shift 3	ToggleFullHalfWidth
+Conversion	Ctrl Shift F	ToggleTraditionalKanji
 Conversion	Ctrl ;	DisplayAsHalfWidth
 Conversion	Ctrl :	DisplayAsHalfAlphanumeric
 Conversion	Ctrl '	DisplayAsHalfAlphanumeric

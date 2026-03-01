@@ -200,6 +200,12 @@ class Session {
   bool TranslateHalfASCII(mozc::commands::Command* command);
   bool TranslateHalfWidth(mozc::commands::Command* command);
   bool ToggleAlphanumericMode(mozc::commands::Command* command);
+  bool ToggleTraditionalKanji(mozc::commands::Command* command);
+  // Show odoriji (iteration marks) palette in the candidate window; user
+  // selects with 1-8, Enter, or click. Escape cancels.
+  bool ShowOdorijiPalette(mozc::commands::Command* command);
+  bool InsertOdorijiDefault(mozc::commands::Command* command);
+  bool ToggleFullHalfWidth(mozc::commands::Command* command);
 
   // Switch the composition mode.
   bool CompositionModeHiragana(mozc::commands::Command* command);
@@ -279,6 +285,14 @@ class Session {
 
   // Undo stack. *begin is the oldest, and *back is the newest.
   std::deque<std::unique_ptr<ImeContext>> undo_contexts_;
+
+  // Odoriji (iteration marks) palette: when true, candidate window shows
+  // 々ゝゞヽヾ〻〱〲 for selection; keys 1-8 / Enter commit, Escape cancels.
+  bool odoriji_palette_visible_ = false;
+  int odoriji_focused_index_ = 0;
+  // Default odoriji index [0..7] for Ctrl+Shift+1 insert; updated when user
+  // selects from palette (Enter, 1-8, or click).
+  int odoriji_default_index_ = 0;
 
   std::unique_ptr<ImeContext> CreateContext(
       const EngineInterface& engine) const;

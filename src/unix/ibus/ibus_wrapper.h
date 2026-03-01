@@ -98,6 +98,7 @@ class GsettingsWrapper : public GobjectWrapper {
 
 class IbusPropertyWrapper : public GobjectWrapper {
  public:
+  IbusPropertyWrapper() : property_(nullptr) {}
   explicit IbusPropertyWrapper(IBusProperty *property);
   virtual ~IbusPropertyWrapper() = default;
 

@@ -43,6 +43,7 @@ import sys
 # properties above.
 PRODUCT_NAMES = {
     'Mozc': 'Mozc',
+    'marinaMozc': 'marinaMozc',
     'GoogleJapaneseInput': 'Google Japanese Input',
 }
 
@@ -190,8 +191,7 @@ def main():
                     help='If specified, output a C++ header. Otherwise, output '
                     'XML.')
   parser.add_option('--branding', dest='branding', default=None,
-                    help='GoogleJapaneseInput for the official build. '
-                    'Otherwise, Mozc.')
+                    help='Branding: Mozc, marinaMozc, or GoogleJapaneseInput.')
   parser.add_option('--ibus_mozc_path', dest='ibus_mozc_path', default='',
                     help='The absolute path of ibus_mozc executable.')
   parser.add_option('--ibus_mozc_icon_path', dest='ibus_mozc_icon_path',
@@ -206,17 +206,29 @@ def main():
   ibus_mozc_icon_path = options.ibus_mozc_icon_path
   setup_path = os.path.join(options.server_dir, 'mozc_tool')
 
-  # Information to generate <component> part of mozc.xml.
+  # Component identity: unique name and textdomain for marinaMozc (install next to Mozc)
+  if options.branding == 'marinaMozc':
+    component_name = 'com.marinamozc.IBus.Mozc'
+    textdomain = 'ibus-marinamozc'
+    author = 'marinaMozc'
+    homepage = 'https://github.com/google/mozc'
+  else:
+    component_name = 'com.google.IBus.Mozc'
+    textdomain = 'ibus-mozc'
+    author = 'Google LLC'
+    homepage = 'https://github.com/google/mozc'
+
+  # Information to generate <component> part of mozc.xml / marinamozc.xml.
   component = {
-      'name': 'com.google.IBus.Mozc',
+      'name': component_name,
       'description': product_name + ' Component',
       'exec': ibus_mozc_path + ' --ibus',
       # TODO(mazda): Generate the version number.
       'version': '0.0.0.0',
-      'author': 'Google LLC',
+      'author': author,
       'license': 'New BSD',
-      'homepage': 'https://github.com/google/mozc',
-      'textdomain': 'ibus-mozc',
+      'homepage': homepage,
+      'textdomain': textdomain,
   }
 
   engine_common = {
