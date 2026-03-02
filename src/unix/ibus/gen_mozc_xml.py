@@ -97,12 +97,12 @@ def GetEnginesXml(engine_common, engines):
   return '\n'.join(output)
 
 
-def GetIbusConfigTextProto(engines):
+def GetIbusConfigTextProto(engines, branding=None):
   """Outputs a TextProto data for iBus config.
 
   Args:
-    engines: A dictionary from a property name to a list of property values of
-        engines. For example, {'name': ['mozc-jp', 'mozc', 'mozc-dv']}.
+    engines: A list of engine dicts. For example, [{'name': 'mozc-jp', ...}].
+    branding: Optional branding string ('marinaMozc', etc.) for defaults.
   Returns:
     output string in TextProto.
   """
@@ -114,7 +114,9 @@ def GetIbusConfigTextProto(engines):
     for key, value in engine.items():
       output.append(GetTextProtoElement(key, value))
     output.append('}')
-  output.append('active_on_launch: False')
+  # marinaMozc: start in Hiragana (IME on). Stock Mozc keeps IBus recommendation (False).
+  active_on_launch = 'True' if (branding == 'marinaMozc') else 'False'
+  output.append('active_on_launch: ' + active_on_launch)
   output.append('mozc_renderer {')
   output.append("  # Set 'False' to use IBus' candidate window.")
   output.append('  enabled : True')
@@ -156,7 +158,7 @@ def OutputCppVariable(prefix, key, value):
   print('const char k%s%s[] = "%s";' % (prefix, key.capitalize(), value))
 
 
-def OutputCpp(component, engine_common, engines):
+def OutputCpp(component, engine_common, engines, branding=None):
   """Outputs a C++ header file for mozc/unix/ibus/main.cc.
 
   Args:
@@ -166,6 +168,7 @@ def OutputCpp(component, engine_common, engines):
         are commonly used in all engines. For example, {'language': 'ja'}.
     engines: A dictionary from a property name to a list of property values of
         engines. For example, [{'name': 'mozc-jp',...}, {'name': 'mozc'},...]
+    branding: Optional branding string for default config (e.g. 'marinaMozc').
   """
   guard_name = 'MOZC_UNIX_IBUS_MAIN_H_'
   print(CPP_HEADER % (guard_name, guard_name))
@@ -178,7 +181,7 @@ def OutputCpp(component, engine_common, engines):
   print(GetEnginesXml(engine_common, engines))
   print(')#";')
   print('const char kIbusConfigTextProto[] = R"#(', end='')
-  print(GetIbusConfigTextProto(engines))
+  print(GetIbusConfigTextProto(engines, branding))
   print(')#";')
   print(CPP_FOOTER % guard_name)
 
@@ -241,38 +244,53 @@ def main():
       'setup': setup_path + ' --mode=config_dialog',
   }
 
-  # DO NOT change the engine name 'mozc-jp'. The names is referenced by
+  # DO NOT change the engine name 'mozc-jp'. The name is referenced by
   # unix/ibus/mozc_engine.cc.
-  engines = [{
-      'name': 'mozc-jp',
-      'longname': product_name,
-      'layout': 'default',
-      'layout_variant': '',
-      'layout_option': '',
-      'rank': 80,
-      'symbol': 'あ',
-  }, {
-      'name': 'mozc-on',
-      'longname': product_name + u':あ',
-      'layout': 'default',
-      'layout_variant': '',
-      'layout_option': '',
-      'rank': 99,
-      'symbol': 'あ',
-      'composition_mode': 'HIRAGANA',
-  }, {
-      'name': 'mozc-off',
-      'longname': product_name + ':A_',
-      'layout': 'default',
-      'layout_variant': '',
-      'layout_option': '',
-      'rank': 99,
-      'symbol': 'A',
-      'composition_mode': 'DIRECT',
-  }]
+  # marinaMozc: register only the main engine so one entry appears in the
+  # input method list (Japonais (marinaMozc)). Stock Mozc may show three
+  # (mozc-jp, mozc-on, mozc-off) on some setups.
+  if options.branding == 'marinaMozc':
+    engines = [{
+        'name': 'mozc-jp',
+        'longname': product_name,
+        'layout': 'default',
+        'layout_variant': '',
+        'layout_option': '',
+        'rank': 80,
+        'symbol': 'あ',
+        'composition_mode': 'HIRAGANA',
+    }]
+  else:
+    engines = [{
+        'name': 'mozc-jp',
+        'longname': product_name,
+        'layout': 'default',
+        'layout_variant': '',
+        'layout_option': '',
+        'rank': 80,
+        'symbol': 'あ',
+    }, {
+        'name': 'mozc-on',
+        'longname': product_name + u':あ',
+        'layout': 'default',
+        'layout_variant': '',
+        'layout_option': '',
+        'rank': 99,
+        'symbol': 'あ',
+        'composition_mode': 'HIRAGANA',
+    }, {
+        'name': 'mozc-off',
+        'longname': product_name + ':A_',
+        'layout': 'default',
+        'layout_variant': '',
+        'layout_option': '',
+        'rank': 99,
+        'symbol': 'A',
+        'composition_mode': 'DIRECT',
+    }]
 
   if options.output_cpp:
-    OutputCpp(component, engine_common, engines)
+    OutputCpp(component, engine_common, engines, options.branding)
   else:
     OutputXml(component, ibus_mozc_path)
   return 0

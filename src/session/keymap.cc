@@ -482,6 +482,7 @@ void KeyMapManager::InitCommandData() {
                           DirectInputState::NONE);
   }
   RegisterDirectCommand("Reconvert", DirectInputState::RECONVERT);
+  RegisterDirectCommand("InsertMacronVowel", DirectInputState::INSERT_MACRON_VOWEL);
 
   // Precomposition
   RegisterPrecompositionCommand("IMEOff", PrecompositionState::IME_OFF);
@@ -498,6 +499,8 @@ void KeyMapManager::InitCommandData() {
                                 PrecompositionState::INSERT_FULL_SPACE);
   RegisterPrecompositionCommand("ToggleAlphanumericMode",
                                 PrecompositionState::TOGGLE_ALPHANUMERIC_MODE);
+  RegisterPrecompositionCommand("ToggleHiraganaDirect",
+                                PrecompositionState::TOGGLE_HIRAGANA_DIRECT);
   RegisterPrecompositionCommand("ToggleTraditionalKanji",
                                 PrecompositionState::TOGGLE_TRADITIONAL_KANJI);
   RegisterPrecompositionCommand("ShowOdorijiPalette",
@@ -506,6 +509,10 @@ void KeyMapManager::InitCommandData() {
                                 PrecompositionState::INSERT_ODORIJI_DEFAULT);
   RegisterPrecompositionCommand("ToggleFullHalfWidth",
                                 PrecompositionState::TOGGLE_FULL_HALF_WIDTH);
+  RegisterPrecompositionCommand("ToggleManyoshuHiragana",
+                                PrecompositionState::TOGGLE_MANYOSHU_HIRAGANA);
+  RegisterPrecompositionCommand("InsertMacronVowel",
+                                PrecompositionState::INSERT_MACRON_VOWEL);
   if (kCompositionModeXCommandSupported) {
     RegisterPrecompositionCommand(
         kCommandStringCompositionModeHiragana,
@@ -622,6 +629,8 @@ void KeyMapManager::InitCommandData() {
                              CompositionState::TRANSLATE_HALF_ASCII);
   RegisterCompositionCommand("ToggleAlphanumericMode",
                              CompositionState::TOGGLE_ALPHANUMERIC_MODE);
+  RegisterCompositionCommand("ToggleHiraganaDirect",
+                             CompositionState::TOGGLE_HIRAGANA_DIRECT);
   RegisterCompositionCommand("ToggleTraditionalKanji",
                              CompositionState::TOGGLE_TRADITIONAL_KANJI);
   RegisterCompositionCommand("ShowOdorijiPalette",
@@ -630,6 +639,10 @@ void KeyMapManager::InitCommandData() {
                              CompositionState::INSERT_ODORIJI_DEFAULT);
   RegisterCompositionCommand("ToggleFullHalfWidth",
                              CompositionState::TOGGLE_FULL_HALF_WIDTH);
+  RegisterCompositionCommand("ToggleManyoshuHiragana",
+                             CompositionState::TOGGLE_MANYOSHU_HIRAGANA);
+  RegisterCompositionCommand("InsertMacronVowel",
+                             CompositionState::INSERT_MACRON_VOWEL);
   if (kCompositionModeXCommandSupported) {
     RegisterCompositionCommand(kCommandStringCompositionModeHiragana,
                                CompositionState::COMPOSITION_MODE_HIRAGANA);
@@ -713,6 +726,8 @@ void KeyMapManager::InitCommandData() {
                             ConversionState::SWITCH_KANA_TYPE);
   RegisterConversionCommand("ToggleAlphanumericMode",
                             ConversionState::TOGGLE_ALPHANUMERIC_MODE);
+  RegisterConversionCommand("ToggleHiraganaDirect",
+                            ConversionState::TOGGLE_HIRAGANA_DIRECT);
   RegisterConversionCommand("ToggleTraditionalKanji",
                             ConversionState::TOGGLE_TRADITIONAL_KANJI);
   RegisterConversionCommand("ShowOdorijiPalette",
@@ -720,7 +735,11 @@ void KeyMapManager::InitCommandData() {
   RegisterConversionCommand("InsertOdorijiDefault",
                             ConversionState::INSERT_ODORIJI_DEFAULT);
   RegisterConversionCommand("ToggleFullHalfWidth",
-                            ConversionState::TOGGLE_FULL_HALF_WIDTH);
+                           ConversionState::TOGGLE_FULL_HALF_WIDTH);
+  RegisterConversionCommand("ToggleManyoshuHiragana",
+                           ConversionState::TOGGLE_MANYOSHU_HIRAGANA);
+  RegisterConversionCommand("InsertMacronVowel",
+                            ConversionState::INSERT_MACRON_VOWEL);
   RegisterConversionCommand("DisplayAsHiragana",
                             ConversionState::DISPLAY_AS_HIRAGANA);
   RegisterConversionCommand("DisplayAsFullKatakana",

@@ -337,6 +337,13 @@ IbusEngineWrapper::Rectangle IbusEngineWrapper::GetCursorArea() {
   return {cursor_area.x, cursor_area.y, cursor_area.width, cursor_area.height};
 }
 
+void IbusEngineWrapper::SetCursorArea(int x, int y, int w, int h) {
+  engine_->cursor_area.x = x;
+  engine_->cursor_area.y = y;
+  engine_->cursor_area.width = w;
+  engine_->cursor_area.height = h;
+}
+
 void IbusEngineWrapper::ShowLookupTable() {
   ibus_engine_show_lookup_table(engine_);
 }

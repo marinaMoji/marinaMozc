@@ -23,6 +23,20 @@ Composition	Ctrl s	MoveCursorLeft
 Composition	Ctrl Shift 1	InsertOdorijiDefault
 Composition	Ctrl Shift 2	ShowOdorijiPalette
 Composition	Ctrl Shift 3	ToggleFullHalfWidth
+Composition	RightShift	ToggleManyoshuHiragana
+Composition	Ctrl Alt a	InsertMacronVowel
+Composition	Ctrl Alt e	InsertMacronVowel
+Composition	Ctrl Alt i	InsertMacronVowel
+Composition	Ctrl Alt o	InsertMacronVowel
+Composition	Ctrl Alt u	InsertMacronVowel
+Composition	Ctrl Alt Shift A	InsertMacronVowel
+Composition	Ctrl Alt Shift E	InsertMacronVowel
+Composition	Ctrl Alt Shift I	InsertMacronVowel
+Composition	Ctrl Alt Shift O	InsertMacronVowel
+Composition	Ctrl Alt Shift U	InsertMacronVowel
+Composition	Ctrl Shift `	ToggleAlphanumericMode
+Composition	Ctrl Shift 5	ToggleHiraganaDirect
+Composition	Ctrl Shift ²	ToggleHiraganaDirect
 Composition	Ctrl Shift F	ToggleTraditionalKanji
 Composition	Ctrl Shift Space	InsertFullSpace
 Composition	Ctrl Space	InsertHalfSpace
@@ -88,6 +102,17 @@ Conversion	Ctrl s	SegmentFocusLeft
 Conversion	Ctrl Shift 1	InsertOdorijiDefault
 Conversion	Ctrl Shift 2	ShowOdorijiPalette
 Conversion	Ctrl Shift 3	ToggleFullHalfWidth
+Conversion	RightShift	ToggleManyoshuHiragana
+Conversion	Ctrl Alt a	InsertMacronVowel
+Conversion	Ctrl Alt e	InsertMacronVowel
+Conversion	Ctrl Alt i	InsertMacronVowel
+Conversion	Ctrl Alt o	InsertMacronVowel
+Conversion	Ctrl Alt u	InsertMacronVowel
+Conversion	Ctrl Alt Shift A	InsertMacronVowel
+Conversion	Ctrl Alt Shift E	InsertMacronVowel
+Conversion	Ctrl Alt Shift I	InsertMacronVowel
+Conversion	Ctrl Alt Shift O	InsertMacronVowel
+Conversion	Ctrl Alt Shift U	InsertMacronVowel
 Conversion	Ctrl Shift F	ToggleTraditionalKanji
 Conversion	Ctrl Shift Space	InsertFullSpace
 Conversion	Ctrl Space	InsertHalfSpace
@@ -98,6 +123,9 @@ Conversion	Ctrl x	ConvertNext
 Conversion	Ctrl z	Cancel
 Conversion	Delete	Cancel
 Conversion	Down	ConvertNext
+Conversion	Ctrl Shift `	ToggleAlphanumericMode
+Conversion	Ctrl Shift 5	ToggleHiraganaDirect
+Conversion	Ctrl Shift ²	ToggleHiraganaDirect
 Conversion	Eisu	ToggleAlphanumericMode
 Conversion	End	SegmentFocusLast
 Conversion	Enter	Commit
@@ -146,12 +174,38 @@ DirectInput	Hiragana	IMEOn
 DirectInput	Kanji	IMEOn
 DirectInput	Katakana	IMEOn
 DirectInput	ON	IMEOn
+DirectInput	Ctrl Alt a	InsertMacronVowel
+DirectInput	Ctrl Alt e	InsertMacronVowel
+DirectInput	Ctrl Alt i	InsertMacronVowel
+DirectInput	Ctrl Alt o	InsertMacronVowel
+DirectInput	Ctrl Alt u	InsertMacronVowel
+DirectInput	Ctrl Alt Shift A	InsertMacronVowel
+DirectInput	Ctrl Alt Shift E	InsertMacronVowel
+DirectInput	Ctrl Alt Shift I	InsertMacronVowel
+DirectInput	Ctrl Alt Shift O	InsertMacronVowel
+DirectInput	Ctrl Alt Shift U	InsertMacronVowel
+DirectInput	Ctrl Shift 5	IMEOn
+DirectInput	Ctrl Shift ²	IMEOn
 Precomposition	ASCII	InsertCharacter
 Precomposition	Backspace	Revert
 Precomposition	Ctrl Backspace	Undo
 Precomposition	Ctrl Shift 1	InsertOdorijiDefault
 Precomposition	Ctrl Shift 2	ShowOdorijiPalette
 Precomposition	Ctrl Shift 3	ToggleFullHalfWidth
+Precomposition	RightShift	ToggleManyoshuHiragana
+Precomposition	Ctrl Alt a	InsertMacronVowel
+Precomposition	Ctrl Alt e	InsertMacronVowel
+Precomposition	Ctrl Alt i	InsertMacronVowel
+Precomposition	Ctrl Alt o	InsertMacronVowel
+Precomposition	Ctrl Alt u	InsertMacronVowel
+Precomposition	Ctrl Alt Shift A	InsertMacronVowel
+Precomposition	Ctrl Alt Shift E	InsertMacronVowel
+Precomposition	Ctrl Alt Shift I	InsertMacronVowel
+Precomposition	Ctrl Alt Shift O	InsertMacronVowel
+Precomposition	Ctrl Alt Shift U	InsertMacronVowel
+Precomposition	Ctrl Shift `	ToggleAlphanumericMode
+Precomposition	Ctrl Shift 5	ToggleHiraganaDirect
+Precomposition	Ctrl Shift ²	ToggleHiraganaDirect
 Precomposition	Ctrl Shift F	ToggleTraditionalKanji
 Precomposition	Ctrl Shift Space	InsertFullSpace
 Precomposition	Eisu	ToggleAlphanumericMode

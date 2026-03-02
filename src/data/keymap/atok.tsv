@@ -17,6 +17,20 @@ Composition	Ctrl Space	Convert
 Composition	Ctrl u	ConvertToHiragana
 Composition	Delete	Delete
 Composition	Down	Commit
+Composition	Ctrl Shift `	ToggleAlphanumericMode
+Composition	Ctrl Shift 5	ToggleHiraganaDirect
+Composition	Ctrl Shift ²	ToggleHiraganaDirect
+Composition	RightShift	ToggleManyoshuHiragana
+Composition	Ctrl Alt a	InsertMacronVowel
+Composition	Ctrl Alt e	InsertMacronVowel
+Composition	Ctrl Alt i	InsertMacronVowel
+Composition	Ctrl Alt o	InsertMacronVowel
+Composition	Ctrl Alt u	InsertMacronVowel
+Composition	Ctrl Alt Shift A	InsertMacronVowel
+Composition	Ctrl Alt Shift E	InsertMacronVowel
+Composition	Ctrl Alt Shift I	InsertMacronVowel
+Composition	Ctrl Alt Shift O	InsertMacronVowel
+Composition	Ctrl Alt Shift U	InsertMacronVowel
 Composition	Eisu	ToggleAlphanumericMode
 Composition	Enter	Commit
 Composition	ESC	Cancel
@@ -60,6 +74,19 @@ Conversion	Ctrl Right	SegmentFocusLast
 Conversion	Ctrl Shift 1	InsertOdorijiDefault
 Conversion	Ctrl Shift 2	ShowOdorijiPalette
 Conversion	Ctrl Shift 3	ToggleFullHalfWidth
+Conversion	RightShift	ToggleManyoshuHiragana
+Conversion	Ctrl Alt a	InsertMacronVowel
+Conversion	Ctrl Alt e	InsertMacronVowel
+Conversion	Ctrl Alt i	InsertMacronVowel
+Conversion	Ctrl Alt o	InsertMacronVowel
+Conversion	Ctrl Alt u	InsertMacronVowel
+Conversion	Ctrl Alt Shift A	InsertMacronVowel
+Conversion	Ctrl Alt Shift E	InsertMacronVowel
+Conversion	Ctrl Alt Shift I	InsertMacronVowel
+Conversion	Ctrl Alt Shift O	InsertMacronVowel
+Conversion	Ctrl Alt Shift U	InsertMacronVowel
+Conversion	Ctrl Shift `	ToggleAlphanumericMode
+Conversion	Ctrl Shift ²	ToggleAlphanumericMode
 Conversion	Ctrl Shift F	ToggleTraditionalKanji
 Conversion	Ctrl Shift Left	SegmentWidthShrink
 Conversion	Ctrl Shift Right	SegmentWidthExpand
@@ -102,10 +129,36 @@ DirectInput	Kanji	IMEOn
 DirectInput	Muhenkan	IMEOn
 DirectInput	ON	IMEOn
 DirectInput	Shift Henkan	Reconvert
+DirectInput	Ctrl Alt a	InsertMacronVowel
+DirectInput	Ctrl Alt e	InsertMacronVowel
+DirectInput	Ctrl Alt i	InsertMacronVowel
+DirectInput	Ctrl Alt o	InsertMacronVowel
+DirectInput	Ctrl Alt u	InsertMacronVowel
+DirectInput	Ctrl Alt Shift A	InsertMacronVowel
+DirectInput	Ctrl Alt Shift E	InsertMacronVowel
+DirectInput	Ctrl Alt Shift I	InsertMacronVowel
+DirectInput	Ctrl Alt Shift O	InsertMacronVowel
+DirectInput	Ctrl Alt Shift U	InsertMacronVowel
+DirectInput	Ctrl Shift 5	IMEOn
+DirectInput	Ctrl Shift ²	IMEOn
 Precomposition	Backspace	Revert
 Precomposition	Ctrl Backspace	Undo
 Precomposition	Ctrl F12	LaunchConfigDialog
 Precomposition	Ctrl F7	LaunchWordRegisterDialog
+Precomposition	Ctrl Shift `	ToggleAlphanumericMode
+Precomposition	Ctrl Shift 5	ToggleHiraganaDirect
+Precomposition	Ctrl Shift ²	ToggleHiraganaDirect
+Precomposition	RightShift	ToggleManyoshuHiragana
+Precomposition	Ctrl Alt a	InsertMacronVowel
+Precomposition	Ctrl Alt e	InsertMacronVowel
+Precomposition	Ctrl Alt i	InsertMacronVowel
+Precomposition	Ctrl Alt o	InsertMacronVowel
+Precomposition	Ctrl Alt u	InsertMacronVowel
+Precomposition	Ctrl Alt Shift A	InsertMacronVowel
+Precomposition	Ctrl Alt Shift E	InsertMacronVowel
+Precomposition	Ctrl Alt Shift I	InsertMacronVowel
+Precomposition	Ctrl Alt Shift O	InsertMacronVowel
+Precomposition	Ctrl Alt Shift U	InsertMacronVowel
 Precomposition	Eisu	ToggleAlphanumericMode
 Precomposition	F10	ToggleAlphanumericMode
 Precomposition	Hankaku/Zenkaku	CancelAndIMEOff

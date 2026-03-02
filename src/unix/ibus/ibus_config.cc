@@ -172,20 +172,31 @@ ibus::Engine::CompositionMode IbusConfig::GetCompositionMode(
     absl::string_view engine_name) const {
   for (const ibus::Engine &engine : config_.engines()) {
     if (engine.name() == engine_name) {
-      return engine.composition_mode();
+      ibus::Engine::CompositionMode mode = engine.composition_mode();
+#ifdef MARINAMOZC
+      // marinaMozc: default to Hiragana when not set (e.g. old config file).
+      if (mode == ibus::Engine::NONE) {
+        return ibus::Engine::HIRAGANA;
+      }
+#endif
+      return mode;
     }
   }
   return ibus::Engine::NONE;
 }
 
 bool IbusConfig::IsActiveOnLaunch() const {
+#ifdef MARINAMOZC
+  // marinaMozc: always start in Hiragana (IME on).
+  return true;
+#else
   if (config_.has_active_on_launch()) {
     return config_.active_on_launch();
   }
-
-  // The default value is off as IBus team's recommentation.
+  // The default value is off as IBus team's recommendation.
   // https://github.com/google/mozc/issues/201
   return false;
+#endif
 }
 
 bool IbusConfig::IsMozcRendererEnabled() const {

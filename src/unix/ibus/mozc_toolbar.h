@@ -18,8 +18,14 @@ class MozcEngine;
 // callbacks. Call from FocusIn. No-op if GTK toolbar is disabled.
 void MozcToolbarShow(MozcEngine* engine);
 
-// Hides the toolbar. Call from FocusOut.
+// Hides the toolbar. Call from FocusOut or when disabling.
 void MozcToolbarHide();
+
+// marinaMoji-style: true if toolbar should auto-hide on focus loss (false on Wayland).
+bool MozcToolbarShouldHideOnFocusLoss();
+
+// marinaMoji-style: schedule hide after delay_ms; cancelled if show is requested first.
+void MozcToolbarScheduleHideDelayed(unsigned int delay_ms);
 
 // Updates toolbar state from engine output (schema mode, shin/kyu, half/full).
 // Call after UpdateAll when the toolbar is visible.

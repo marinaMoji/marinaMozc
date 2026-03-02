@@ -200,11 +200,13 @@ class Session {
   bool TranslateHalfASCII(mozc::commands::Command* command);
   bool TranslateHalfWidth(mozc::commands::Command* command);
   bool ToggleAlphanumericMode(mozc::commands::Command* command);
+  bool ToggleHiraganaDirect(mozc::commands::Command* command);
   bool ToggleTraditionalKanji(mozc::commands::Command* command);
   // Show odoriji (iteration marks) palette in the candidate window; user
   // selects with 1-8, Enter, or click. Escape cancels.
   bool ShowOdorijiPalette(mozc::commands::Command* command);
   bool InsertOdorijiDefault(mozc::commands::Command* command);
+  bool InsertMacronVowel(mozc::commands::Command* command);
   bool ToggleFullHalfWidth(mozc::commands::Command* command);
 
   // Switch the composition mode.
@@ -213,6 +215,8 @@ class Session {
   bool CompositionModeHalfKatakana(mozc::commands::Command* command);
   bool CompositionModeFullASCII(mozc::commands::Command* command);
   bool CompositionModeHalfASCII(mozc::commands::Command* command);
+  bool CompositionModeManyoshu(mozc::commands::Command* command);
+  bool ToggleManyoshuHiragana(mozc::commands::Command* command);
   bool CompositionModeSwitchKanaType(mozc::commands::Command* command);
 
   // Specify the input field type.
@@ -293,6 +297,10 @@ class Session {
   // Default odoriji index [0..7] for Ctrl+Shift+1 insert; updated when user
   // selects from palette (Enter, 1-8, or click).
   int odoriji_default_index_ = 0;
+
+  // When true, output mode is MANYOSHU (万葉集): composer stays HIRAGANA but
+  // preedit is shown as katakana and candidates are deduplicated.
+  bool manyoshu_mode_ = false;
 
   std::unique_ptr<ImeContext> CreateContext(
       const EngineInterface& engine) const;

@@ -76,3 +76,47 @@ See [src/data/dictionary_oss/README.txt](src/data/dictionary_oss/README.txt)
 ### [src/data/test/stress_test/](src/data/test/stress_test)
 Public Domain.  See the comment in
 [src/data/test/stress_test/sentences.txt](src/data/test/stress_test/sentences.txt)
+
+## Install in CachyOS
+
+Install dependancies
+
+```
+sudo pacman -S --needed \
+  ibus glib2 base-devel \
+  qt6-base \
+  opencc \
+  gtk3 \
+  zip unzip jdk-openjdk
+```
+
+install bazelisk
+```
+# AUR (yay/paru)
+yay -S bazelisk
+# or
+paru -S bazelisk
+```
+
+Build
+
+```
+git clone https://github.com/YOUR_USERNAME/YOUR_MOZC_FORK.git marinaMozc --recursive
+cd marinaMozc/src
+
+bazelisk build package --config oss_linux --config release_build
+```
+
+Install
+```
+sudo unzip -o bazel-bin/unix/mozc.zip -d /
+```
+
+- **JAVA_HOME:** If you see "Could not find system javabase" or "must point to a JDK, not a JRE", install a JDK (`jdk-openjdk`), then e.g. `export JAVA_HOME=/usr/lib/jvm/java-25-openjdk` (or `default`) before building.
+- **rules_swift aspect error:** If you see "required_aspect_providers, got element of type NoneType", ensure you use **bazelisk** (not system `bazel`) from the `src/` directory so the correct Bazel and dependency versions are used. This repo pins `rules_swift` to 2.5.0 and dependency overrides to avoid that failure on Linux.
+
+Reload ibus and add marinaMozc
+```
+ibus write-cache
+ibus restart
+```

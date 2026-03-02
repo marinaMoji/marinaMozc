@@ -54,7 +54,8 @@ enum CompositionMode {
   HALF_ASCII = 3;
   FULL_ASCII = 4;
   HALF_KATAKANA = 5;
-  NUM_OF_COMPOSITIONS = 6;
+  MANYOSHU = 6;  // 万葉集: hiragana input, katakana preedit/candidates, dedupe by normalized value
+  NUM_OF_COMPOSITIONS = 7;
 }
 
 message KeyEvent {

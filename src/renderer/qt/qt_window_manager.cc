@@ -205,6 +205,21 @@ Rect GetRect(const commands::RendererCommand::Rectangle &prect) {
 
 bool IsUpdated(const commands::RendererCommand &prev_command,
                const commands::RendererCommand &new_command) {
+  // Reposition when cursor/preedit rect changes so the candidate window
+  // follows the app-reported cursor (e.g. after SetCursorLocation).
+  if (prev_command.has_preedit_rectangle() != new_command.has_preedit_rectangle()) {
+    return true;
+  }
+  if (prev_command.has_preedit_rectangle() && new_command.has_preedit_rectangle()) {
+    const auto &prev_rect = prev_command.preedit_rectangle();
+    const auto &new_rect = new_command.preedit_rectangle();
+    if (prev_rect.left() != new_rect.left() || prev_rect.top() != new_rect.top() ||
+        prev_rect.right() != new_rect.right() ||
+        prev_rect.bottom() != new_rect.bottom()) {
+      return true;
+    }
+  }
+
   const commands::CandidateWindow &prev_cands =
       prev_command.output().candidate_window();
   const commands::CandidateWindow &new_cands =
@@ -212,11 +227,13 @@ bool IsUpdated(const commands::RendererCommand &prev_command,
   if (prev_cands.candidate_size() != new_cands.candidate_size()) {
     return true;
   }
-  if (prev_cands.candidate(0).id() != new_cands.candidate(0).id()) {
-    return true;
-  }
-  if (prev_cands.candidate(0).value() != new_cands.candidate(0).value()) {
-    return true;
+  if (prev_cands.candidate_size() > 0 && new_cands.candidate_size() > 0) {
+    if (prev_cands.candidate(0).id() != new_cands.candidate(0).id()) {
+      return true;
+    }
+    if (prev_cands.candidate(0).value() != new_cands.candidate(0).value()) {
+      return true;
+    }
   }
   return false;
 }

@@ -158,7 +158,8 @@ class MozcEngine : public EngineInterface {
   IBusEngine *current_engine_ = nullptr;
 
   // When true, show toolbar on focus; toggled by IME menu "Hide/Show toolbar".
-  bool toolbar_visible_ = true;
+  // marinaMozc: start hidden (user can show via menu).
+  bool toolbar_visible_ = false;
 
   friend class MozcEngineTestPeer;
 };

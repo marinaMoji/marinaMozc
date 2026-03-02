@@ -215,6 +215,9 @@ class IbusEngineWrapper {
     int height;
   };
   Rectangle GetCursorArea();
+  // Set cursor area from set_cursor_location callback (x,y,w,h). IBus docs
+  // pass these as the signal args; engine_->cursor_area may not be updated.
+  void SetCursorArea(int x, int y, int w, int h);
 
   void ShowLookupTable();
   void HideLookupTable();

@@ -17,9 +17,10 @@ To keep **upstream merges** easy, odoriji logic is isolated in a single module; 
 - **Selection:** When the user selects an odoriji (by **1–8**, **Enter**, or **click**), that choice is saved as the **session default** for Ctrl+Shift+1.
   - **1–8:** Insert the corresponding odoriji, set it as session default, and close the palette.
   - **Enter:** Insert the focused odoriji, set it as session default, and close the palette.
-  - **Up/Down (or Virtual Up/Down):** Change the focused candidate.
+  - **Navigation (same as conversion candidate window):** **Up**, **Down**, **Left**, **Right** (and Virtual variants) move the focus. **Space** = next candidate, **Shift+Space** = previous candidate.
   - **Escape:** Close the palette without inserting (default for Ctrl+Shift+1 is unchanged).
-- **Click:** The client can send `SUBMIT_CANDIDATE` with the chosen candidate `id` (0–7); the session commits that odoriji, sets it as session default, and closes the palette.
+  - **Click:** The client can send `SUBMIT_CANDIDATE` with the chosen candidate `id` (0–7); the session commits that odoriji, sets it as session default, and closes the palette.
+- All navigation and selection keys are consumed by the palette (no space or other character is inserted; the palette stays open until commit or Escape).
 
 ## Implementation (less invasive)
 
@@ -35,7 +36,7 @@ To keep **upstream merges** easy, odoriji logic is isolated in a single module; 
 
 ## Keymap
 
-- **Ctrl+Shift+1** → `InsertOdorijiDefault` (insert session default odoriji), **Ctrl+Shift+2** → `ShowOdorijiPalette` (open palette), and **Ctrl+Shift+3** → `ToggleFullHalfWidth` (toggle half/full width) are bound in the same states in:
+- **Ctrl+Shift+1** → `InsertOdorijiDefault` (insert session default odoriji), **Ctrl+Shift+2** → `ShowOdorijiPalette` (open palette), **Ctrl+Shift+3** → `ToggleFullHalfWidth` (toggle half/full width), and **Ctrl+Shift+`** / **Ctrl+Shift+²** (AZERTY) → `ToggleAlphanumericMode` (toggle kana/ASCII input) are bound in Precomposition, Composition, and Conversion in:
   - `ms-ime.tsv`, `chromeos.tsv`, `mobile.tsv`: Precomposition, Composition, Conversion
   - `atok.tsv`, `kotoeri.tsv`: Conversion only (Ctrl+Shift+3 where Ctrl+Shift+2 exists)
 

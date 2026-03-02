@@ -49,6 +49,20 @@ package(default_visibility = ["//visibility:private"])
 
 licenses(["notice"])
 
+# Optional: Wayland layer-shell for toolbar (Hyprland/Sway etc.).
+# Build with (from mozc/src): bazel build --config=linux --define=gtk_layer_shell=1 //unix/ibus:ibus_mozc
+config_setting(
+    name = "gtk_layer_shell",
+    define_values = {"gtk_layer_shell": "1"},
+)
+
+# Toolbar SVGs for GTK toolbar; installed to IBus icon dir so GetIconPath() finds them.
+filegroup(
+    name = "toolbar_icons",
+    srcs = glob(["toolbar_icons/*.svg"]),
+    visibility = ["//unix:__pkg__"],
+)
+
 mozc_py_binary(
     name = "gen_mozc_xml_main",
     srcs = ["gen_mozc_xml.py"],
@@ -204,7 +218,10 @@ mozc_cc_library(
         linux = ["MOZC_HAVE_GTK_TOOLBAR"],
         oss_linux = ["MOZC_HAVE_GTK_TOOLBAR"],
         default = [],
-    ),
+    ) + select({
+        ":gtk_layer_shell": ["MOZC_HAVE_GTK_LAYER_SHELL"],
+        "//conditions:default": [],
+    }),
     # Avoid absolute -I paths under /usr/lib (Bazel sandbox disallows paths outside execution root).
     # System GTK and dependencies (Pango, ATK, etc.) needed for toolbar.
     copts = mozc_select(
@@ -216,6 +233,7 @@ mozc_cc_library(
             "-I/usr/include/cairo",
             "-I/usr/include/harfbuzz",
             "-I/usr/include/atk-1.0",
+            "-I/usr/include/librsvg-2.0",
         ],
         oss_linux = [
             "-I/usr/include/gtk-3.0",
@@ -225,9 +243,13 @@ mozc_cc_library(
             "-I/usr/include/cairo",
             "-I/usr/include/harfbuzz",
             "-I/usr/include/atk-1.0",
+            "-I/usr/include/librsvg-2.0",
         ],
         default = [],
-    ),
+    ) + select({
+        ":gtk_layer_shell": ["-I/usr/include/gtk-layer-shell"],
+        "//conditions:default": [],
+    }),
     linkopts = mozc_select(
         linux = [
             "-lgtk-3",
@@ -240,6 +262,7 @@ mozc_cc_library(
             "-lcairo",
             "-lgobject-2.0",
             "-lglib-2.0",
+            "-lrsvg-2",
         ],
         oss_linux = [
             "-lgtk-3",
@@ -252,9 +275,13 @@ mozc_cc_library(
             "-lcairo",
             "-lgobject-2.0",
             "-lglib-2.0",
+            "-lrsvg-2",
         ],
         default = [],
-    ),
+    ) + select({
+        ":gtk_layer_shell": ["-lgtk-layer-shell"],
+        "//conditions:default": [],
+    }),
     deps = [
         ":candidate_window_handler",
         ":ibus_config",
@@ -306,6 +333,7 @@ mozc_cc_library(
         ":gen_main_h",
     ],
     copts = ["-Wno-unused-variable"],
+    local_defines = ["MARINAMOZC"],
     deps = [
         ":ibus_config_cc_proto",
         "//base:file_util",

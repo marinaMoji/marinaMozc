@@ -183,6 +183,13 @@ bool KeyEventHandler::ProcessModifiers(bool is_key_up, uint keyval,
     }
     modifiers_to_be_sent_.clear();
   } else if (is_modifier_only) {
+    // Right Shift alone: send on key down so ToggleManyoshuHiragana fires
+    // when the user presses it (X11/IBus keyval for Shift_R is 0xFFE2).
+    constexpr uint kKeyvalShiftR = 0xFFE2;
+    if (!is_key_up && keyval == kKeyvalShiftR &&
+        currently_pressed_modifiers_.empty()) {
+      return true;
+    }
     // TODO(hsumita): Supports a key sequence below.
     // - Ctrl down
     // - a down

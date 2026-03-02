@@ -40,9 +40,15 @@
 
 namespace mozc {
 namespace {
+// X11/Wayland: Shift+Space often produces keyval 0xA0 (U+00A0 NO-BREAK SPACE)
+// instead of 0x20 with shift modifier. Map it to SPACE so odoriji palette etc.
+// can treat it as "Shift+Space" (cycle backwards).
+constexpr uint kNoBreakSpaceKeyval = 0xA0;
+
 constexpr auto kSpecialKeyMap =
     CreateFlatMap<uint, commands::KeyEvent::SpecialKey>({
         {IBUS_space, commands::KeyEvent::SPACE},
+        {kNoBreakSpaceKeyval, commands::KeyEvent::SPACE},
         {IBUS_Return, commands::KeyEvent::ENTER},
         {IBUS_Left, commands::KeyEvent::LEFT},
         {IBUS_Right, commands::KeyEvent::RIGHT},
@@ -341,10 +347,18 @@ bool KeyTranslator::Translate(uint keyval, uint keycode, uint modifiers,
       out_event->add_modifier_keys(commands::KeyEvent::CAPS);
     }
     out_event->set_key_code(keyval);
+  } else if (keyval == 0xB2) {
+    // U+00B2 SUPERSCRIPT TWO (²); same physical key as backtick on AZERTY.
+    // Pass through so Ctrl+Shift+² can be bound to ToggleAlphanumericMode.
+    out_event->set_key_code(keyval);
   } else if (const uint *mask = kIbusModifierMaskMap.FindOrNull(keyval);
              mask != nullptr) {
     // Convert Ibus modifier key to mask (e.g. IBUS_Shift_L to IBUS_SHIFT_MASK)
     modifiers |= *mask;
+    // Record which physical key so keymap can match "RightShift" for toggle.
+    if (keyval == IBUS_Shift_R) {
+      out_event->add_modifier_keys(commands::KeyEvent::RIGHT_SHIFT);
+    }
   } else if (const commands::KeyEvent::SpecialKey *key =
                  kSpecialKeyMap.FindOrNull(keyval);
              key != nullptr) {
@@ -355,9 +369,10 @@ bool KeyTranslator::Translate(uint keyval, uint keycode, uint modifiers,
   }
 
   // Modifier keys
-  if (modifiers & IBUS_SHIFT_MASK && !IsPrintable(keyval, keycode, modifiers)) {
-    // Only set a SHIFT modifier when `keyval` is a printable key by following
-    // the Mozc's rule.
+  // Include keyval == 0xA0 (nobreakspace): many systems send that for Shift+Space
+  // rather than space with shift modifier, so we add SHIFT for odoriji palette etc.
+  if ((modifiers & IBUS_SHIFT_MASK || keyval == kNoBreakSpaceKeyval) &&
+      !IsPrintable(keyval, keycode, modifiers)) {
     out_event->add_modifier_keys(commands::KeyEvent::SHIFT);
   }
   if (modifiers & IBUS_CONTROL_MASK) {

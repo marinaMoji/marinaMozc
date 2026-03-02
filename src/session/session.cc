@@ -39,11 +39,13 @@
 #include <utility>
 #include <vector>
 
+#include "absl/container/flat_hash_set.h"
 #include "absl/log/check.h"
 #include "absl/log/log.h"
 #include "absl/strings/string_view.h"
 #include "absl/time/time.h"
 #include "base/clock.h"
+#include "base/japanese_util.h"
 #include "base/util.h"
 #include "config/config_handler.h"
 #include "composer/composer.h"
@@ -101,6 +103,10 @@ void ApplyCompositionMode(const commands::CompositionMode mode,
       break;
     case commands::HALF_ASCII:
       SwitchInputMode(transliteration::HALF_ASCII, composer);
+      break;
+    case commands::MANYOSHU:
+      // Same as HIRAGANA for composer; session uses manyoshu_mode_ for display.
+      SwitchInputMode(transliteration::HIRAGANA, composer);
       break;
     default:
       LOG(DFATAL) << "ime on with invalid mode";
@@ -315,6 +321,9 @@ bool Session::SendCommand(commands::Command* command) {
       case commands::HALF_KATAKANA:
         result = CompositionModeHalfKatakana(command);
         break;
+      case commands::MANYOSHU:
+        result = CompositionModeManyoshu(command);
+        break;
       default:
         LOG(ERROR) << "Unknown mode: " << session_command.composition_mode();
         break;
@@ -526,12 +535,20 @@ bool Session::SendKey(commands::Command* command) {
   // state instead of directly using context_->state().
   HandleIndirectImeOnOff(command);
 
+  std::string odoriji_commit_result;
   if (odoriji_palette_visible_ &&
       OdorijiPalette::HandleKey(command->input().key(), command,
                                 &odoriji_palette_visible_,
                                 &odoriji_focused_index_,
-                                &odoriji_default_index_)) {
+                                &odoriji_default_index_,
+                                &odoriji_commit_result)) {
     Output(command);
+    if (!odoriji_commit_result.empty()) {
+      commands::Result* result = command->mutable_output()->mutable_result();
+      result->set_type(commands::Result::STRING);
+      result->set_value(odoriji_commit_result);
+    }
+    command->mutable_output()->set_consumed(true);
     return true;
   }
 
@@ -629,6 +646,8 @@ bool Session::SendKeyDirectInputState(commands::Command* command) {
       return EchoBackAndClearUndoContext(command);
     case keymap::DirectInputState::RECONVERT:
       return RequestConvertReverse(command);
+    case keymap::DirectInputState::INSERT_MACRON_VOWEL:
+      return InsertMacronVowel(command);
   }
   return false;
 }
@@ -669,6 +688,8 @@ bool Session::SendKeyPrecompositionState(commands::Command* command) {
       return InsertSpaceFullWidth(command);
     case keymap::PrecompositionState::TOGGLE_ALPHANUMERIC_MODE:
       return ToggleAlphanumericMode(command);
+    case keymap::PrecompositionState::TOGGLE_HIRAGANA_DIRECT:
+      return ToggleHiraganaDirect(command);
     case keymap::PrecompositionState::TOGGLE_TRADITIONAL_KANJI:
       return ToggleTraditionalKanji(command);
     case keymap::PrecompositionState::SHOW_ODORIJI_PALETTE:
@@ -677,6 +698,10 @@ bool Session::SendKeyPrecompositionState(commands::Command* command) {
       return InsertOdorijiDefault(command);
     case keymap::PrecompositionState::TOGGLE_FULL_HALF_WIDTH:
       return ToggleFullHalfWidth(command);
+    case keymap::PrecompositionState::TOGGLE_MANYOSHU_HIRAGANA:
+      return ToggleManyoshuHiragana(command);
+    case keymap::PrecompositionState::INSERT_MACRON_VOWEL:
+      return InsertMacronVowel(command);
     case keymap::PrecompositionState::REVERT:
       return Revert(command);
     case keymap::PrecompositionState::UNDO:
@@ -850,6 +875,8 @@ bool Session::SendKeyCompositionState(commands::Command* command) {
 
     case keymap::CompositionState::TOGGLE_ALPHANUMERIC_MODE:
       return ToggleAlphanumericMode(command);
+    case keymap::CompositionState::TOGGLE_HIRAGANA_DIRECT:
+      return ToggleHiraganaDirect(command);
     case keymap::CompositionState::TOGGLE_TRADITIONAL_KANJI:
       return ToggleTraditionalKanji(command);
     case keymap::CompositionState::SHOW_ODORIJI_PALETTE:
@@ -858,7 +885,10 @@ bool Session::SendKeyCompositionState(commands::Command* command) {
       return InsertOdorijiDefault(command);
     case keymap::CompositionState::TOGGLE_FULL_HALF_WIDTH:
       return ToggleFullHalfWidth(command);
-
+    case keymap::CompositionState::TOGGLE_MANYOSHU_HIRAGANA:
+      return ToggleManyoshuHiragana(command);
+    case keymap::CompositionState::INSERT_MACRON_VOWEL:
+      return InsertMacronVowel(command);
     case keymap::CompositionState::COMPOSITION_MODE_HIRAGANA:
       return CompositionModeHiragana(command);
 
@@ -1003,6 +1033,8 @@ bool Session::SendKeyConversionState(commands::Command* command) {
 
     case keymap::ConversionState::TOGGLE_ALPHANUMERIC_MODE:
       return ToggleAlphanumericMode(command);
+    case keymap::ConversionState::TOGGLE_HIRAGANA_DIRECT:
+      return ToggleHiraganaDirect(command);
 
     case keymap::ConversionState::TOGGLE_TRADITIONAL_KANJI:
       return ToggleTraditionalKanji(command);
@@ -1012,7 +1044,10 @@ bool Session::SendKeyConversionState(commands::Command* command) {
       return InsertOdorijiDefault(command);
     case keymap::ConversionState::TOGGLE_FULL_HALF_WIDTH:
       return ToggleFullHalfWidth(command);
-
+    case keymap::ConversionState::TOGGLE_MANYOSHU_HIRAGANA:
+      return ToggleManyoshuHiragana(command);
+    case keymap::ConversionState::INSERT_MACRON_VOWEL:
+      return InsertMacronVowel(command);
     case keymap::ConversionState::COMPOSITION_MODE_HIRAGANA:
       return CompositionModeHiragana(command);
 
@@ -1107,8 +1142,16 @@ bool Session::MakeSureIMEOn(mozc::commands::Command* command) {
   }
   if (command->input().has_command() &&
       command->input().command().has_composition_mode()) {
-    ApplyCompositionMode(command->input().command().composition_mode(),
-                         context_->mutable_composer());
+    const commands::CompositionMode mode =
+        command->input().command().composition_mode();
+    if (mode == commands::MANYOSHU) {
+      SwitchInputMode(transliteration::HIRAGANA,
+                      context_->mutable_composer());
+      manyoshu_mode_ = true;
+    } else {
+      ApplyCompositionMode(mode, context_->mutable_composer());
+      manyoshu_mode_ = false;
+    }
   }
   OutputMode(command);
   return true;
@@ -1132,8 +1175,16 @@ bool Session::MakeSureIMEOff(mozc::commands::Command* command) {
   }
   if (command->input().has_command() &&
       command->input().command().has_composition_mode()) {
-    ApplyCompositionMode(command->input().command().composition_mode(),
-                         context_->mutable_composer());
+    const commands::CompositionMode mode =
+        command->input().command().composition_mode();
+    if (mode == commands::MANYOSHU) {
+      SwitchInputMode(transliteration::HIRAGANA,
+                      context_->mutable_composer());
+      manyoshu_mode_ = true;
+    } else {
+      ApplyCompositionMode(mode, context_->mutable_composer());
+      manyoshu_mode_ = false;
+    }
   }
   OutputMode(command);
   return true;
@@ -1407,9 +1458,17 @@ bool Session::SelectCandidate(commands::Command* command) {
 }
 
 bool Session::CommitCandidate(commands::Command* command) {
+  std::string odoriji_commit_result;
   if (OdorijiPalette::TryCommitCandidate(command, &odoriji_palette_visible_,
-                                         &odoriji_default_index_)) {
+                                         &odoriji_default_index_,
+                                         &odoriji_commit_result)) {
     Output(command);
+    if (!odoriji_commit_result.empty()) {
+      commands::Result* result = command->mutable_output()->mutable_result();
+      result->set_type(commands::Result::STRING);
+      result->set_value(odoriji_commit_result);
+    }
+    command->mutable_output()->set_consumed(true);
     return true;
   }
 
@@ -2166,6 +2225,7 @@ bool Session::TranslateHalfASCII(commands::Command* command) {
 
 bool Session::CompositionModeHiragana(commands::Command* command) {
   command->mutable_output()->set_consumed(true);
+  manyoshu_mode_ = false;
   EnsureIMEIsOn();
   // The temporary mode should not be overridden.
   SwitchInputMode(transliteration::HIRAGANA, context_->mutable_composer());
@@ -2175,6 +2235,7 @@ bool Session::CompositionModeHiragana(commands::Command* command) {
 
 bool Session::CompositionModeFullKatakana(commands::Command* command) {
   command->mutable_output()->set_consumed(true);
+  manyoshu_mode_ = false;
   EnsureIMEIsOn();
   // The temporary mode should not be overridden.
   SwitchInputMode(transliteration::FULL_KATAKANA, context_->mutable_composer());
@@ -2184,6 +2245,7 @@ bool Session::CompositionModeFullKatakana(commands::Command* command) {
 
 bool Session::CompositionModeHalfKatakana(commands::Command* command) {
   command->mutable_output()->set_consumed(true);
+  manyoshu_mode_ = false;
   EnsureIMEIsOn();
   // The temporary mode should not be overridden.
   SwitchInputMode(transliteration::HALF_KATAKANA, context_->mutable_composer());
@@ -2193,6 +2255,7 @@ bool Session::CompositionModeHalfKatakana(commands::Command* command) {
 
 bool Session::CompositionModeFullASCII(commands::Command* command) {
   command->mutable_output()->set_consumed(true);
+  manyoshu_mode_ = false;
   EnsureIMEIsOn();
   // The temporary mode should not be overridden.
   SwitchInputMode(transliteration::FULL_ASCII, context_->mutable_composer());
@@ -2202,11 +2265,28 @@ bool Session::CompositionModeFullASCII(commands::Command* command) {
 
 bool Session::CompositionModeHalfASCII(commands::Command* command) {
   command->mutable_output()->set_consumed(true);
+  manyoshu_mode_ = false;
   EnsureIMEIsOn();
   // The temporary mode should not be overridden.
   SwitchInputMode(transliteration::HALF_ASCII, context_->mutable_composer());
   OutputFromState(command);
   return true;
+}
+
+bool Session::CompositionModeManyoshu(commands::Command* command) {
+  command->mutable_output()->set_consumed(true);
+  manyoshu_mode_ = true;
+  EnsureIMEIsOn();
+  SwitchInputMode(transliteration::HIRAGANA, context_->mutable_composer());
+  OutputFromState(command);
+  return true;
+}
+
+bool Session::ToggleManyoshuHiragana(commands::Command* command) {
+  if (manyoshu_mode_) {
+    return CompositionModeHiragana(command);
+  }
+  return CompositionModeManyoshu(command);
 }
 
 bool Session::CompositionModeSwitchKanaType(commands::Command* command) {
@@ -2371,6 +2451,14 @@ bool Session::ToggleAlphanumericMode(commands::Command* command) {
   return true;
 }
 
+bool Session::ToggleHiraganaDirect(commands::Command* command) {
+  command->mutable_output()->set_consumed(true);
+  if (context_->state() == ImeContext::DIRECT) {
+    return CompositionModeHiragana(command);
+  }
+  return IMEOff(command);
+}
+
 bool Session::ToggleTraditionalKanji(commands::Command* command) {
   command->mutable_output()->set_consumed(true);
   config::Config config = config::ConfigHandler::GetCopiedConfig();
@@ -2398,6 +2486,39 @@ bool Session::InsertOdorijiDefault(commands::Command* command) {
   result->set_type(commands::Result::STRING);
   result->set_value(OdorijiPalette::GetCharacter(idx));
   OutputFromState(command);
+  return true;
+}
+
+bool Session::InsertMacronVowel(commands::Command* command) {
+  // In Direct input, always allow macron; in other states require ASCII mode.
+  if (context_->state() != ImeContext::DIRECT) {
+    const transliteration::TransliterationType mode =
+        context_->composer().GetInputMode();
+    if (mode != transliteration::HALF_ASCII && mode != transliteration::FULL_ASCII) {
+      return InsertCharacter(command);
+    }
+  }
+  if (!command->input().has_key() || !command->input().key().has_key_code()) {
+    return InsertCharacter(command);
+  }
+  const uint32_t code = command->input().key().key_code();
+  // UTF-8 bytes for macron vowels (avoid u8"" to stay compatible with C++20 char8_t).
+  const char* macron = nullptr;
+  switch (code) {
+    case 'a': macron = "\xC4\x81"; break;   // ā U+0101
+    case 'e': macron = "\xC4\x93"; break;   // ē U+0113
+    case 'i': macron = "\xC4\xAB"; break;   // ī U+012B
+    case 'o': macron = "\xC5\x8D"; break;   // ō U+014D
+    case 'u': macron = "\xC5\xAB"; break;   // ū U+016B
+    case 'A': macron = "\xC4\x80"; break;   // Ā U+0100
+    case 'E': macron = "\xC4\x92"; break;   // Ē U+0112
+    case 'I': macron = "\xC4\xAA"; break;   // Ī U+012A
+    case 'O': macron = "\xC5\x8C"; break;   // Ō U+014C
+    case 'U': macron = "\xC5\xAA"; break;   // Ū U+016A
+    default: return InsertCharacter(command);
+  }
+  absl::string_view s(macron);
+  CommitStringDirectly(s, s, command);
   return true;
 }
 
@@ -2829,11 +2950,56 @@ void Session::Output(commands::Command* command) {
     OdorijiPalette::OverlayOutput(command->mutable_output(),
                                   odoriji_focused_index_);
   }
+  if (manyoshu_mode_) {
+    commands::Output* output = command->mutable_output();
+    // Show preedit as katakana (composer produced hiragana).
+    if (output->has_preedit()) {
+      commands::Preedit* preedit = output->mutable_preedit();
+      for (int i = 0; i < preedit->segment_size(); ++i) {
+        std::string* value = preedit->mutable_segment(i)->mutable_value();
+        *value = japanese_util::HiraganaToKatakana(*value);
+      }
+    }
+    // Convert candidate values to katakana and deduplicate by that value
+    // (keep first occurrence; このもの and コノモノ collapse to one コノモノ).
+    if (output->has_candidate_window()) {
+      commands::CandidateWindow* cw = output->mutable_candidate_window();
+      absl::flat_hash_set<std::string> seen;
+      std::vector<commands::CandidateWindow::Candidate> kept;
+      int new_focused = 0;
+      for (int i = 0; i < cw->candidate_size(); ++i) {
+        const std::string& raw = cw->candidate(i).value();
+        std::string value_katakana = japanese_util::HiraganaToKatakana(raw);
+        if (seen.insert(value_katakana).second) {
+          commands::CandidateWindow::Candidate c = cw->candidate(i);
+          c.set_value(value_katakana);
+          kept.push_back(std::move(c));
+          if (i == static_cast<int>(cw->focused_index())) {
+            new_focused = static_cast<int>(kept.size()) - 1;
+          }
+        } else if (i == static_cast<int>(cw->focused_index())) {
+          for (size_t j = 0; j < kept.size(); ++j) {
+            if (kept[j].value() == value_katakana) {
+              new_focused = static_cast<int>(j);
+              break;
+            }
+          }
+        }
+      }
+      cw->clear_candidate();
+      for (size_t i = 0; i < kept.size(); ++i) {
+        *cw->add_candidate() = kept[i];
+      }
+      cw->set_focused_index(static_cast<uint32_t>(new_focused));
+      cw->set_size(static_cast<uint32_t>(kept.size()));
+    }
+  }
 }
 
 void Session::OutputMode(commands::Command* command) const {
-  const commands::CompositionMode mode =
-      ToCompositionMode(context_->composer().GetInputMode());
+  const commands::CompositionMode mode = manyoshu_mode_
+      ? commands::MANYOSHU
+      : ToCompositionMode(context_->composer().GetInputMode());
   const commands::CompositionMode comeback_mode =
       ToCompositionMode(context_->composer().GetComebackInputMode());
 

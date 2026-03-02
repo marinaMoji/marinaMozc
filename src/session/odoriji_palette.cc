@@ -47,6 +47,17 @@ void FillCandidateWindow(commands::CandidateWindow* candidate_window,
   }
 }
 
+bool HasShiftModifier(const commands::KeyEvent& key) {
+  for (int i = 0; i < key.modifier_keys_size(); ++i) {
+    if (key.modifier_keys(i) == commands::KeyEvent::SHIFT ||
+        key.modifier_keys(i) == commands::KeyEvent::LEFT_SHIFT ||
+        key.modifier_keys(i) == commands::KeyEvent::RIGHT_SHIFT) {
+      return true;
+    }
+  }
+  return false;
+}
+
 }  // namespace
 
 const char* OdorijiPalette::GetCharacter(size_t index) {
@@ -63,7 +74,8 @@ bool OdorijiPalette::HandleKey(const commands::KeyEvent& key,
                                 commands::Command* command,
                                 bool* visible,
                                 int* focused_index,
-                                int* session_default_index) {
+                                int* session_default_index,
+                                std::string* commit_result) {
   if (!visible || !focused_index || !command) return false;
   if (!*visible) return false;
 
@@ -74,14 +86,12 @@ bool OdorijiPalette::HandleKey(const commands::KeyEvent& key,
     }
     if (key.special_key() == commands::KeyEvent::ENTER ||
         key.special_key() == commands::KeyEvent::VIRTUAL_ENTER) {
-      command->mutable_output()->set_consumed(true);
-      commands::Result* result = command->mutable_output()->mutable_result();
-      result->set_type(commands::Result::STRING);
-      result->set_value(kOdorijiChars[*focused_index]);
+      if (commit_result) *commit_result = kOdorijiChars[*focused_index];
       if (session_default_index) *session_default_index = *focused_index;
       *visible = false;
       return true;
     }
+    // Navigation: same as conversion candidate window (arrows, space, shift+space)
     if (key.special_key() == commands::KeyEvent::UP ||
         key.special_key() == commands::KeyEvent::VIRTUAL_UP) {
       *focused_index =
@@ -93,15 +103,32 @@ bool OdorijiPalette::HandleKey(const commands::KeyEvent& key,
       *focused_index = static_cast<int>((*focused_index + 1) % kCount);
       return true;
     }
+    if (key.special_key() == commands::KeyEvent::LEFT ||
+        key.special_key() == commands::KeyEvent::VIRTUAL_LEFT) {
+      *focused_index =
+          static_cast<int>((*focused_index + kCount - 1) % kCount);
+      return true;
+    }
+    if (key.special_key() == commands::KeyEvent::RIGHT ||
+        key.special_key() == commands::KeyEvent::VIRTUAL_RIGHT) {
+      *focused_index = static_cast<int>((*focused_index + 1) % kCount);
+      return true;
+    }
+    if (key.special_key() == commands::KeyEvent::SPACE) {
+      if (HasShiftModifier(key)) {
+        *focused_index =
+            static_cast<int>((*focused_index + kCount - 1) % kCount);
+      } else {
+        *focused_index = static_cast<int>((*focused_index + 1) % kCount);
+      }
+      return true;
+    }
   }
   if (key.has_key_code()) {
     const uint32_t k = key.key_code();
     if (k >= 0x31 && k <= 0x38) {
       int id = static_cast<int>(k - 0x31);
-      command->mutable_output()->set_consumed(true);
-      commands::Result* result = command->mutable_output()->mutable_result();
-      result->set_type(commands::Result::STRING);
-      result->set_value(kOdorijiChars[id]);
+      if (commit_result) *commit_result = kOdorijiChars[id];
       if (session_default_index) *session_default_index = id;
       *visible = false;
       return true;
@@ -125,17 +152,15 @@ void OdorijiPalette::OverlayOutput(commands::Output* output, int focused_index) 
 
 bool OdorijiPalette::TryCommitCandidate(commands::Command* command,
                                         bool* visible,
-                                        int* session_default_index) {
+                                        int* session_default_index,
+                                        std::string* commit_result) {
   if (!visible || !*visible || !command->input().has_command() ||
       !command->input().command().has_id()) {
     return false;
   }
   const int id = command->input().command().id();
   if (id < 0 || id >= static_cast<int>(kCount)) return false;
-  command->mutable_output()->set_consumed(true);
-  commands::Result* result = command->mutable_output()->mutable_result();
-  result->set_type(commands::Result::STRING);
-  result->set_value(kOdorijiChars[id]);
+  if (commit_result) *commit_result = kOdorijiChars[id];
   if (session_default_index) *session_default_index = id;
   *visible = false;
   return true;

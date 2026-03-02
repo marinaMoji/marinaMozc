@@ -54,23 +54,40 @@ mozc_cc_library(
     visibility = ["//:__subpackages__"],
     deps = [
         ":log_file",
-        ":system_util",
         "@com_google_absl//absl/flags:flag",
     ] + mozc_select(
-        android = ["//base"],
+        android = [
+            ":file_util",
+            "@com_google_absl//absl/flags:parse",
+        ],
         client = [
             ":file_util",
             "@com_google_absl//absl/flags:parse",
         ],
-        default = ["//base"],
-        ios = ["//base"],
-        linux = ["//base"],
-        macos = ["//base"],
+        default = [
+            ":file_util",
+            "@com_google_absl//absl/flags:parse",
+        ],
+        ios = [
+            ":file_util",
+            "@com_google_absl//absl/flags:parse",
+        ],
+        linux = [
+            ":file_util",
+            "@com_google_absl//absl/flags:parse",
+        ],
+        macos = [
+            ":file_util",
+            "@com_google_absl//absl/flags:parse",
+        ],
         oss = [
             ":file_util",
             "@com_google_absl//absl/flags:parse",
         ],
-        windows = ["//base"],
+        windows = [
+            ":file_util",
+            "@com_google_absl//absl/flags:parse",
+        ],
     ),
 )
 
@@ -83,22 +100,46 @@ mozc_cc_library(
         ":log_file",
         "@com_google_absl//absl/flags:flag",
     ] + mozc_select(
-        android = ["//base"],
+        android = [
+            ":file_util",
+            ":system_util",
+            "@com_google_absl//absl/flags:parse",
+        ],
         client = [
             ":file_util",
             ":system_util",
             "@com_google_absl//absl/flags:parse",
         ],
-        default = ["//base"],
-        ios = ["//base"],
-        linux = ["//base"],
-        macos = ["//base"],
+        default = [
+            ":file_util",
+            ":system_util",
+            "@com_google_absl//absl/flags:parse",
+        ],
+        ios = [
+            ":file_util",
+            ":system_util",
+            "@com_google_absl//absl/flags:parse",
+        ],
+        linux = [
+            ":file_util",
+            ":system_util",
+            "@com_google_absl//absl/flags:parse",
+        ],
+        macos = [
+            ":file_util",
+            ":system_util",
+            "@com_google_absl//absl/flags:parse",
+        ],
         oss = [
             ":file_util",
             ":system_util",
             "@com_google_absl//absl/flags:parse",
         ],
-        windows = ["//base"],
+        windows = [
+            ":file_util",
+            ":system_util",
+            "@com_google_absl//absl/flags:parse",
+        ],
     ),
 )
 

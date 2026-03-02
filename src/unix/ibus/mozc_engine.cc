@@ -282,6 +282,9 @@ void MozcEngine::CursorUp(IbusEngineWrapper *engine) {
 }
 
 void MozcEngine::Disable(IbusEngineWrapper *engine) {
+  if (MozcToolbarAvailable()) {
+    MozcToolbarHide();
+  }
   RevertSession(engine);
   GetCandidateWindowHandler(engine)->Hide(engine);
   key_event_handler_->Clear();
@@ -303,6 +306,8 @@ commands::CompositionMode ConvertCompositionMode(
       return commands::FULL_ASCII;
     case ibus::Engine::HALF_KATAKANA:
       return commands::HALF_KATAKANA;
+    case ibus::Engine::MANYOSHU:
+      return commands::MANYOSHU;
     default:
       return commands::NUM_OF_COMPOSITIONS;
   }
@@ -346,6 +351,9 @@ void MozcEngine::Enable(IbusEngineWrapper *engine) {
 void MozcEngine::FocusIn(IbusEngineWrapper *engine) {
   current_engine_ = engine->GetEngine();
   property_handler_->Register(engine);
+  if (MozcToolbarAvailable()) {
+    property_handler_->UpdateToolbarLabel(engine, toolbar_visible_);
+  }
   UpdatePreeditMethod();
   if (MozcToolbarAvailable() && toolbar_visible_) {
     MozcToolbarShow(this);
@@ -354,7 +362,8 @@ void MozcEngine::FocusIn(IbusEngineWrapper *engine) {
 
 void MozcEngine::FocusOut(IbusEngineWrapper *engine) {
   if (MozcToolbarAvailable()) {
-    MozcToolbarHide();
+    // Always hide toolbar when engine loses focus (e.g. switching to another IME).
+    MozcToolbarScheduleHideDelayed(150);
   }
   GetCandidateWindowHandler(engine)->Hide(engine);
   property_handler_->ResetContentType(engine);
@@ -474,6 +483,10 @@ void MozcEngine::SetCapabilities(IbusEngineWrapper *engine, uint capabilities) {
 
 void MozcEngine::SetCursorLocation(IbusEngineWrapper *engine, int x, int y,
                                    int w, int h) {
+  // Use the (x,y,w,h) from the IBus set_cursor_location signal so the
+  // candidate window is positioned below the cursor. engine_->cursor_area
+  // is not guaranteed to be updated by IBus before this callback.
+  engine->SetCursorArea(x, y, w, h);
   GetCandidateWindowHandler(engine)->UpdateCursorRect(engine);
 }
 

@@ -36,6 +36,10 @@ bazel_dep(
     version = "20250814.0",
     repo_name = "com_google_absl",
 )
+single_version_override(
+    module_name = "abseil-cpp",
+    version = "20250814.0",
+)
 
 # protobuf: 32.0 2025-08-15
 # https://github.com/protocolbuffers/protobuf
@@ -43,6 +47,10 @@ bazel_dep(
     name = "protobuf",
     version = "32.0",
     repo_name = "com_google_protobuf",
+)
+single_version_override(
+    module_name = "protobuf",
+    version = "32.0",
 )
 
 # googletest: 1.17.0 2025-05-01
@@ -64,6 +72,10 @@ bazel_dep(
 # https://github.com/bazelbuild/bazel-skylib/
 bazel_dep(
     name = "bazel_skylib",
+    version = "1.8.1",
+)
+single_version_override(
+    module_name = "bazel_skylib",
     version = "1.8.1",
 )
 
@@ -88,6 +100,10 @@ bazel_dep(
     name = "rules_python",
     version = "1.5.4",
 )
+single_version_override(
+    module_name = "rules_python",
+    version = "1.5.4",
+)
 
 # Bazel macOS build (4.1.2 2025-08-07)
 # https://github.com/bazelbuild/rules_apple
@@ -106,17 +122,24 @@ bazel_dep(
     version = "1.23.1",
     repo_name = "build_bazel_apple_support",
 )
+single_version_override(
+    module_name = "apple_support",
+    version = "1.23.1",
+)
 
-# rules_swift: 3.1.2 2025-08-06
+# rules_swift: 2.5.0 (pinned for compatibility with rules_apple on Linux)
 # https://github.com/bazelbuild/rules_swift/
-# While Mozc does not directly depends on rules_swift, it is still indirectly
-# used by rules_apple. To avoid the build failure on Windows, its version needs
-# to be 2.5.0 or higher.
-# https://github.com/bazelbuild/rules_swift/issues/1502
+# While Mozc does not directly depend on rules_swift, it is used by rules_apple.
+# 3.1.2 can trigger "required_aspect_providers got NoneType" on Linux; 2.5.0
+# satisfies "2.5.0 or higher" for Windows (rules_swift#1502) and works with 4.1.2.
 bazel_dep(
     name = "rules_swift",
-    version = "3.1.2",
+    version = "2.5.0",
     repo_name = "build_bazel_rules_swift",
+)
+single_version_override(
+    module_name = "rules_swift",
+    version = "2.5.0",
 )
 
 # rules_cc: 0.2.2 2025-08-28

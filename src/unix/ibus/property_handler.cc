@@ -106,6 +106,13 @@ constexpr MozcEngineProperty kMozcEngineProperties[] = {
         "_ｱ",
         "katakana_half.png",
     },
+    {
+        commands::MANYOSHU,
+        "InputMode.Manyoshu",
+        "万葉集",
+        "万",
+        "hiragana.png",
+    },
 };
 
 struct MozcEngineToolProperty {
@@ -355,8 +362,9 @@ void PropertyHandler::AppendOdorijiPalettePropertyToPanel() {
 }
 
 void PropertyHandler::AppendToolbarPropertyToPanel() {
+  // Default: toolbar starts hidden, so menu shows "Show toolbar".
   const std::string label =
-      translator_->MaybeTranslate("Hide toolbar");
+      translator_->MaybeTranslate("Show toolbar");
   prop_toolbar_.Initialize("Toolbar", PROP_TYPE_NORMAL, label, "" /* icon */,
                            PROP_STATE_UNCHECKED, nullptr);
   prop_toolbar_.RefSink();

@@ -57,6 +57,7 @@ struct DirectInputState {
     COMPOSITION_MODE_FULL_ALPHANUMERIC,
     COMPOSITION_MODE_HALF_ALPHANUMERIC,
     RECONVERT,
+    INSERT_MACRON_VOWEL,  // Ctrl+Alt+vowel → ā ē ī ō ū (also in direct input)
   };
 };
 
@@ -72,10 +73,13 @@ struct PrecompositionState {
     INSERT_HALF_SPACE,         // Input half-width space
     INSERT_FULL_SPACE,         // Input full-width space
     TOGGLE_ALPHANUMERIC_MODE,  // toggle AlphaNumeric and Hiragana mode.
+    TOGGLE_HIRAGANA_DIRECT,    // toggle Hiragana and Direct input (Ctrl+Shift+5/²).
     TOGGLE_TRADITIONAL_KANJI,  // toggle traditional (kyūjitai) / modern (shinjitai) kanji.
     SHOW_ODORIJI_PALETTE,      // show iteration marks (々ゝゞ…) in candidate window
     INSERT_ODORIJI_DEFAULT,    // insert session default odoriji (e.g. 々) without opening palette
     TOGGLE_FULL_HALF_WIDTH,    // toggle half/full width
+    TOGGLE_MANYOSHU_HIRAGANA,  // toggle 万葉集 (katakana preedit/candidates, dedupe) / Hiragana
+    INSERT_MACRON_VOWEL,       // Ctrl+Alt+vowel → ā ē ī ō ū (ASCII mode only)
     // Switch input mode.
     COMPOSITION_MODE_HIRAGANA,
     COMPOSITION_MODE_FULL_KATAKANA,
@@ -142,10 +146,13 @@ struct CompositionState {
     TRANSLATE_FULL_ASCII,      // F9
     TRANSLATE_HALF_ASCII,      // F10
     TOGGLE_ALPHANUMERIC_MODE,  // toggle AlphaNumeric and Hiragana mode.
+    TOGGLE_HIRAGANA_DIRECT,    // toggle Hiragana and Direct input (Ctrl+Shift+5/²).
     TOGGLE_TRADITIONAL_KANJI,  // toggle traditional (kyūjitai) / modern (shinjitai) kanji.
     SHOW_ODORIJI_PALETTE,      // show iteration marks (々ゝゞ…) in candidate window
     INSERT_ODORIJI_DEFAULT,    // insert session default odoriji (e.g. 々) without opening palette
     TOGGLE_FULL_HALF_WIDTH,    // toggle half/full width
+    TOGGLE_MANYOSHU_HIRAGANA,
+    INSERT_MACRON_VOWEL,
     // Switch input mode.
     COMPOSITION_MODE_HIRAGANA,
     COMPOSITION_MODE_FULL_KATAKANA,
@@ -197,10 +204,13 @@ struct ConversionState {
     TRANSLATE_FULL_ASCII,      // F9
     TRANSLATE_HALF_ASCII,      // F10
     TOGGLE_ALPHANUMERIC_MODE,  // toggle AlphaNumeric and Hiragana mode.
+    TOGGLE_HIRAGANA_DIRECT,    // toggle Hiragana and Direct input (Ctrl+Shift+5/²).
     TOGGLE_TRADITIONAL_KANJI,  // toggle traditional (kyūjitai) / modern (shinjitai) kanji.
     SHOW_ODORIJI_PALETTE,     // show iteration marks (々ゝゞ…) in candidate window
     INSERT_ODORIJI_DEFAULT,   // insert session default odoriji without opening palette
     TOGGLE_FULL_HALF_WIDTH,   // toggle half/full width
+    TOGGLE_MANYOSHU_HIRAGANA,
+    INSERT_MACRON_VOWEL,
     // Switch input mode.
     COMPOSITION_MODE_HIRAGANA,
     COMPOSITION_MODE_FULL_KATAKANA,

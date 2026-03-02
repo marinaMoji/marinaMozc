@@ -368,13 +368,22 @@ TEST_F(KeyEventHandlerTest, LeftRightModifiers) {
   EXPECT_TRUE(IsPressed(IBUS_Shift_L));
   EXPECT_MODIFIERS_TO_BE_SENT(commands::KeyEvent::SHIFT);
 
-  // Right-Shift down
+  // Right-Shift down with Left Shift already pressed: not sent (normal modifier)
   key.Clear();
   key.add_modifier_keys(commands::KeyEvent::SHIFT);
   EXPECT_FALSE(ProcessKey(false, IBUS_Shift_R, &key));
   EXPECT_TRUE(IsPressed(IBUS_Shift_L));
   EXPECT_TRUE(IsPressed(IBUS_Shift_R));
   EXPECT_MODIFIERS_TO_BE_SENT(commands::KeyEvent::SHIFT);
+}
+
+TEST_F(KeyEventHandlerTest, RightShiftAloneSentOnKeyDown) {
+  // Right Shift pressed alone is sent on key down for ToggleManyoshuHiragana.
+  commands::KeyEvent key;
+  key.add_modifier_keys(commands::KeyEvent::SHIFT);
+  key.add_modifier_keys(commands::KeyEvent::RIGHT_SHIFT);
+  EXPECT_TRUE(ProcessKey(false, IBUS_Shift_R, &key));
+  EXPECT_FALSE(IsPressed(IBUS_Shift_R));  // not stored, key was sent
 }
 
 TEST_F(KeyEventHandlerTest, ProcessModifiers) {
