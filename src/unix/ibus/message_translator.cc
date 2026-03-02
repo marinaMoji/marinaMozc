@@ -61,11 +61,13 @@ const TranslationMap kUTF8JapaneseMap[] = {
     {"Input Mode", "入力モード"},
     {"Show toolbar", "ツールバーを表示"},
     {"Hide toolbar", "ツールバーを非表示"},
-#ifdef GOOGLE_JAPANESE_INPUT_BUILD
+#ifdef MARINAMOZC
+    {"About marinaMoji", "marinaMoji について"},
+#elif defined(GOOGLE_JAPANESE_INPUT_BUILD)
     {"About Mozc", "Google 日本語入力について"},
 #else   // GOOGLE_JAPANESE_INPUT_BUILD
     {"About Mozc", "Mozc について"},
-#endif  // GOOGLE_JAPANESE_INPUT_BUILD
+#endif  // MARINAMOZC / GOOGLE_JAPANESE_INPUT_BUILD
 };
 
 }  // namespace

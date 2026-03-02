@@ -62,6 +62,17 @@ int g_drag_offset_y = 0;
 int g_window_x = 0;
 int g_window_y = 0;
 
+// Force toolbar to use X11/XWayland on GNOME Wayland so positioning and skip-taskbar work.
+// Call only before any GDK/GTK init; uses env only (no gdk_display_*).
+static void MaybeForceX11OnGnomeWayland() {
+  const char* session = g_getenv("XDG_SESSION_TYPE");
+  if (!session || g_ascii_strcasecmp(session, "wayland") != 0) return;
+  const char* desktop = g_getenv("XDG_CURRENT_DESKTOP");
+  const bool is_gnome = desktop && g_strrstr(desktop, "GNOME");
+  if (!is_gnome || g_getenv("GDK_BACKEND")) return;
+  g_setenv("GDK_BACKEND", "x11", TRUE);
+}
+
 // Runtime detection: Wayland vs X11 (for dual-backend toolbar behaviour).
 // marinaMoji uses #ifdef GDK_WINDOWING_* and GDK_IS_*_DISPLAY() plus XDG_SESSION_TYPE
 // fallback; that requires GDK built with both backends. This code uses display name and
@@ -230,8 +241,12 @@ static gboolean DelayedRepositionCb(gpointer /*data*/) {
   return G_SOURCE_REMOVE;
 }
 
-// marinaMoji does not use override-redirect; TOPLEVEL + DOCK is enough.
-static void OnRealize(GtkWidget* /*w*/, gpointer /*data*/) {}
+// On X11/XWayland: unmanaged overlay so no taskbar entry and no WM focus animations.
+static void OnRealize(GtkWidget* w, gpointer /*data*/) {
+  if (!IsX11()) return;
+  GdkWindow* gw = gtk_widget_get_window(w);
+  if (gw) gdk_window_set_override_redirect(gw, TRUE);
+}
 
 static guint32 GetPresentTime() {
   guint32 timestamp = gtk_get_current_event_time();
@@ -293,6 +308,7 @@ static gboolean HideIdleCb(gpointer /*data*/) {
       g_source_remove(g_reposition_timeout_id);
       g_reposition_timeout_id = 0;
     }
+    g_toolbar_user_moved = false;  // marinaMoji-style: revert to bottom-right on next show
     gtk_widget_hide(g_toolbar_window);
   }
   return G_SOURCE_REMOVE;
@@ -464,11 +480,12 @@ void OnOdorijiClicked(GtkWidget* /*widget*/, gpointer /*data*/) {
 
 void EnsureToolbarCreated() {
   if (g_toolbar_window) return;
+  MaybeForceX11OnGnomeWayland();
   if (!gtk_init_check(nullptr, nullptr)) return;
 
   EnsureToolbarCSS();
 
-  // TOPLEVEL + UTILITY so compositor does not show the toolbar in the dock/taskbar.
+  // TOPLEVEL + DOCK (marinaMoji-style) for bottom-right placement; skip_taskbar still set.
   // keep_above + accept_focus/focus_on_map/can_focus false; draggable via gtk_window_begin_move_drag.
   g_toolbar_window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
   gtk_window_set_title(GTK_WINDOW(g_toolbar_window), "marinaMozc");
@@ -477,7 +494,7 @@ void EnsureToolbarCreated() {
   gtk_window_set_keep_above(GTK_WINDOW(g_toolbar_window), TRUE);
   gtk_window_set_skip_taskbar_hint(GTK_WINDOW(g_toolbar_window), TRUE);
   gtk_window_set_skip_pager_hint(GTK_WINDOW(g_toolbar_window), TRUE);
-  gtk_window_set_type_hint(GTK_WINDOW(g_toolbar_window), GDK_WINDOW_TYPE_HINT_UTILITY);
+  gtk_window_set_type_hint(GTK_WINDOW(g_toolbar_window), GDK_WINDOW_TYPE_HINT_DOCK);
   gtk_window_set_accept_focus(GTK_WINDOW(g_toolbar_window), FALSE);
   gtk_window_set_focus_on_map(GTK_WINDOW(g_toolbar_window), FALSE);
   gtk_widget_set_can_focus(g_toolbar_window, FALSE);

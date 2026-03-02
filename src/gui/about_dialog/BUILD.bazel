@@ -59,6 +59,7 @@ mozc_qt_rcc(
         "//data/images:product_icon_32bpp-128.png",
         "//gui/base:tr_en.qm",
         "//gui/base:tr_ja.qm",
+        "//unix/ibus:toolbar_icons/logo_long_light.svg",
     ],
     outs = ["qrc_about_dialog.cc"],
     qrc_file = "about_dialog.qrc",
@@ -77,6 +78,7 @@ mozc_cc_qt_library(
         "about_dialog.h",
         ":uic_about_dialog",
     ],
+    local_defines = ["MARINAMOZC"],
     deps = [
         "//base:file_util",
         "//base:process",

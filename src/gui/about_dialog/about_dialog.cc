@@ -41,6 +41,10 @@
 #include "base/version.h"
 #include "gui/base/util.h"
 
+#ifdef MARINAMOZC
+#include <QImageReader>
+#endif  // MARINAMOZC
+
 namespace mozc {
 namespace gui {
 namespace {
@@ -62,7 +66,11 @@ QString ReplaceString(const QString &str) {
   QString replaced(str);
   Replace(replaced, "[ProductName]", GuiUtil::ProductName());
 
-#ifdef GOOGLE_JAPANESE_INPUT_BUILD
+#ifdef MARINAMOZC
+  Replace(replaced, "[ProductUrl]", "https://github.com/marinaMoji/marinaMozc");
+  Replace(replaced, "[ForumUrl]", "https://github.com/marinaMoji/marinaMozc/issues");
+  Replace(replaced, "[ForumName]", QObject::tr("issues"));
+#elif defined(GOOGLE_JAPANESE_INPUT_BUILD)
   Replace(replaced, "[ProductUrl]", "https://www.google.co.jp/ime/");
   Replace(replaced, "[ForumUrl]",
           "https://support.google.com/gboard/community?hl=ja");
@@ -71,7 +79,7 @@ QString ReplaceString(const QString &str) {
   Replace(replaced, "[ProductUrl]", "https://github.com/google/mozc");
   Replace(replaced, "[ForumUrl]", "https://github.com/google/mozc/issues");
   Replace(replaced, "[ForumName]", QObject::tr("issues"));
-#endif  // GOOGLE_JAPANESE_INPUT_BUILD
+#endif  // MARINAMOZC / GOOGLE_JAPANESE_INPUT_BUILD
 
   const std::string credit_filepath =
       FileUtil::JoinPath(SystemUtil::GetDocumentDirectory(), "credits_en.html");
@@ -90,8 +98,9 @@ AboutDialog::AboutDialog(QWidget *parent)
   setupUi(this);
   setWindowFlags(Qt::WindowSystemMenuHint | Qt::WindowCloseButtonHint);
   setWindowModality(Qt::NonModal);
+  const QColor white(255, 255, 255);
   QPalette window_palette;
-  window_palette.setColor(QPalette::Window, QColor(255, 255, 255));
+  window_palette.setColor(QPalette::Window, white);
   window_palette.setColor(QPalette::WindowText, QColor(0, 0, 0));
   setPalette(window_palette);
   setAutoFillBackground(true);
@@ -100,10 +109,35 @@ AboutDialog::AboutDialog(QWidget *parent)
   GuiUtil::ReplaceWidgetLabels(this);
 
   QPalette palette;
+#ifdef MARINAMOZC
+  palette.setColor(QPalette::Window, white);
+#else
   palette.setColor(QPalette::Window, QColor(236, 233, 216));
+#endif  // MARINAMOZC
   color_frame->setPalette(palette);
   color_frame->setAutoFillBackground(true);
 
+#ifdef MARINAMOZC
+  // marinaMoji: logo on left only (includes product name); single credit line.
+  label->setVisible(false);
+  label_credits->setVisible(false);  // We use only label_6 for credit.
+  label_6->setText(
+      QObject::tr("marinaMoji is a fork of Mozc by M. Pandolfino and D.P. Morgan. "
+                  "Mozc © Google LLC."));
+  // Load toolbar logo SVG and render at ~2x line height (keep aspect ratio).
+  QImageReader reader(QLatin1String(":/marinamozc_logo.svg"));
+  QImage svgImage = reader.read();
+  if (!svgImage.isNull()) {
+    const int line_height = version_label->fontMetrics().height();
+    const int logo_height = std::max(line_height * 2, 24);
+    product_image_ = std::make_unique<QImage>(svgImage.scaledToHeight(
+        logo_height, Qt::SmoothTransformation));
+  } else {
+    product_image_ = std::make_unique<QImage>();
+  }
+  SetLabelText(label_terms);
+  SetLabelText(label_credits);
+#else
   // change font size for product name
   QFont font = label->font();
 #ifdef _WIN32
@@ -121,17 +155,27 @@ AboutDialog::AboutDialog(QWidget *parent)
 
   product_image_ =
       std::make_unique<QImage>(QLatin1String(":/product_logo.png"));
+#endif  // MARINAMOZC
 }
 
 void AboutDialog::paintEvent(QPaintEvent *event) {
-  // draw product logo
   QPainter painter(this);
   const QRect image_rect = product_image_->rect();
-  // allow clipping on right / bottom borders
+  if (image_rect.isEmpty()) return;
+#ifdef MARINAMOZC
+  // Logo on left only (same vertical zone as version_label).
+  const int left_margin = 10;
+  const int top_align = 20;
+  const QRect draw_rect(left_margin, top_align, image_rect.width(),
+                        image_rect.height());
+  painter.drawImage(draw_rect, *product_image_);
+#else
+  // draw product logo on right
   const QRect draw_rect(std::max(5, width() - image_rect.width() - 15),
                         std::max(0, color_frame->y() - image_rect.height()),
                         image_rect.width(), image_rect.height());
   painter.drawImage(draw_rect, *product_image_);
+#endif  // MARINAMOZC
 }
 
 void AboutDialog::SetLinkCallback(LinkCallbackInterface *callback) {

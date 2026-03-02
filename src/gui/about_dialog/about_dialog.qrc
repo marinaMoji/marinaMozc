@@ -5,5 +5,6 @@
   <file alias="tr_ja.qm">../base/tr_ja.qm</file>
   <file alias="tr_en.qm">../base/tr_en.qm</file>
   <file alias="product_logo.png">../../data/images/product_icon_32bpp-128.png</file>
+  <file alias="marinamozc_logo.svg">../../unix/ibus/toolbar_icons/logo_long_light.svg</file>
 </qresource>
 </RCC>

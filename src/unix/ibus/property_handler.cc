@@ -144,7 +144,11 @@ constexpr MozcEngineToolProperty kMozcEngineToolProperties[] = {
     {
         "Tool.AboutDialog",
         "about_dialog",
+#ifdef MARINAMOZC
+        "About marinaMoji",
+#else
         "About Mozc",
+#endif  // MARINAMOZC
         nullptr,
     },
 };

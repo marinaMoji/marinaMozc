@@ -62,6 +62,8 @@ filegroup(
     srcs = glob(["toolbar_icons/*.svg"]),
     visibility = ["//unix:__pkg__"],
 )
+# For marinaMozc about dialog (Qt resource).
+exports_files(["toolbar_icons/logo_long_light.svg"], visibility = ["//gui/about_dialog:__pkg__"])
 
 mozc_py_binary(
     name = "gen_mozc_xml_main",
@@ -131,6 +133,7 @@ mozc_cc_library(
     name = "ibus_property_handler",
     srcs = mozc_select(linux = ["property_handler.cc"]),
     hdrs = mozc_select(linux = ["property_handler.h"]),
+    local_defines = ["MARINAMOZC"],
     deps = [
         ":ibus_header",
         ":ibus_utils",
@@ -161,6 +164,7 @@ mozc_cc_library(
         "path_util.h",
     ],
     local_defines = [
+        "MARINAMOZC",
         'MOZC_IBUS_INSTALL_DIR=\\"' + IBUS_MOZC_INSTALL_DIR + '\\"',
     ],
     deps = [

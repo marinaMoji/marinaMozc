@@ -107,6 +107,7 @@ mozc_cc_qt_library(
         "util.h",
         "window_title_modifier.h",
     ],
+    local_defines = ["MARINAMOZC"],
     deps = [
         ":encoding_util",
         "//base:singleton",
