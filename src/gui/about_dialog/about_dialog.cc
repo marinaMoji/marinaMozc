@@ -118,12 +118,14 @@ AboutDialog::AboutDialog(QWidget *parent)
   color_frame->setAutoFillBackground(true);
 
 #ifdef MARINAMOZC
-  // marinaMoji: logo on left only (includes product name); single credit line.
+  // marinaMoji: logo on left only (includes product name); credit on two lines.
   label->setVisible(false);
   label_credits->setVisible(false);  // We use only label_6 for credit.
+  // Two lines: fork credit, then Google copyright (with wrapping for narrow windows).
   label_6->setText(
-      QObject::tr("marinaMoji is a fork of Mozc by M. Pandolfino and D.P. Morgan. "
+      QObject::tr("marinaMoji is a fork of Mozc by M. Pandolfino and D.P. Morgan.\n"
                   "Mozc © Google LLC."));
+  label_6->setWordWrap(true);
   // Load toolbar logo SVG and render at ~2x line height (keep aspect ratio).
   QImageReader reader(QLatin1String(":/marinamozc_logo.svg"));
   QImage svgImage = reader.read();
@@ -132,6 +134,8 @@ AboutDialog::AboutDialog(QWidget *parent)
     const int logo_height = std::max(line_height * 2, 24);
     product_image_ = std::make_unique<QImage>(svgImage.scaledToHeight(
         logo_height, Qt::SmoothTransformation));
+    // Reserve row 0 height so version_label sits below the logo, not under it.
+    gridLayout->setRowMinimumHeight(0, logo_height + 8);
   } else {
     product_image_ = std::make_unique<QImage>();
   }

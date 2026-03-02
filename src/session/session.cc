@@ -2019,7 +2019,10 @@ void Session::CommitHeadToFocusedSegmentsInternal(
 
 void Session::CommitCompositionDirectly(commands::Command* command) {
   const std::string composition = context_->composer().GetQueryForConversion();
-  const std::string conversion = context_->composer().GetStringForSubmission();
+  std::string conversion = context_->composer().GetStringForSubmission();
+  if (manyoshu_mode_) {
+    conversion = japanese_util::HiraganaToKatakana(conversion);
+  }
   CommitStringDirectly(composition, conversion, command);
 }
 
@@ -2959,6 +2962,11 @@ void Session::Output(commands::Command* command) {
         std::string* value = preedit->mutable_segment(i)->mutable_value();
         *value = japanese_util::HiraganaToKatakana(*value);
       }
+    }
+    // Committed result: convert hiragana to katakana so final text matches display.
+    if (output->has_result()) {
+      commands::Result* result = output->mutable_result();
+      result->set_value(japanese_util::HiraganaToKatakana(result->value()));
     }
     // Convert candidate values to katakana and deduplicate by that value
     // (keep first occurrence; このもの and コノモノ collapse to one コノモノ).
