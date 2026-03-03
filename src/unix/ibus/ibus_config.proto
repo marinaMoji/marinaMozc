@@ -70,4 +70,7 @@ message MozcRendererConfig {
   // set in this field (e.g. "GNOME", "KDE") is found in $XDG_CURRENT_DESKTOP.
   // https://specifications.freedesktop.org/desktop-entry-spec/desktop-entry-spec-latest.html#recognized-keys
   repeated string compatible_wayland_desktop_names = 2;
+  // When true, use IBus candidate window (equivalent to MOZC_IBUS_CANDIDATE_WINDOW=ibus).
+  // When false, use Mozc candidate window when available. Default true = IBus.
+  optional bool use_ibus_candidate_window = 3 [default = true];
 }

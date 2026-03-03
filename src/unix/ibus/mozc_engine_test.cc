@@ -127,17 +127,24 @@ TEST_F(LaunchToolTest, LaunchToolTest) {
 
 // clang-format off
 TEST(MozcEngineTest, CanUseMozcCandidateWindowTest_X11) {
-  // Default enabled
-  EXPECT_TRUE(CallCanUseMozcCandidateWindow(R"(
+  // Default use_ibus_candidate_window=true -> IBus (false = don't use Mozc).
+  EXPECT_FALSE(CallCanUseMozcCandidateWindow(R"(
     mozc_renderer {
     }
-  )", {})) << "mozc_renderer is enabled by default";
+  )", {})) << "Default is IBus candidate window";
 
-  EXPECT_TRUE(CallCanUseMozcCandidateWindow(R"(
+  EXPECT_FALSE(CallCanUseMozcCandidateWindow(R"(
     mozc_renderer {
       enabled : True
     }
-  )", {}));
+  )", {})) << "use_ibus_candidate_window defaults true";
+
+  EXPECT_TRUE(CallCanUseMozcCandidateWindow(R"(
+    mozc_renderer {
+      use_ibus_candidate_window : False
+      enabled : True
+    }
+  )", {})) << "Explicit Mozc candidate window";
 
   EXPECT_FALSE(CallCanUseMozcCandidateWindow(R"(
     mozc_renderer {
@@ -157,14 +164,16 @@ TEST(MozcEngineTest, CanUseMozcCandidateWindowTest_X11) {
 TEST(MozcEngineTest, CanUseMozcCandidateWindowTest_Wayland) {
   EXPECT_FALSE(CallCanUseMozcCandidateWindow(R"(
     mozc_renderer {
+      use_ibus_candidate_window : False
       enabled : True
     }
   )", {
     {"WAYLAND_DISPLAY", "wayland-0"},
-  }));
+  })) << "Wayland without compatible desktop -> no Mozc";
 
   EXPECT_FALSE(CallCanUseMozcCandidateWindow(R"(
     mozc_renderer {
+      use_ibus_candidate_window : False
       enabled : True
       compatible_wayland_desktop_names : []
     }
@@ -175,6 +184,7 @@ TEST(MozcEngineTest, CanUseMozcCandidateWindowTest_Wayland) {
 
   EXPECT_TRUE(CallCanUseMozcCandidateWindow(R"(
     mozc_renderer {
+      use_ibus_candidate_window : False
       enabled : True
       compatible_wayland_desktop_names : ["GNOME"]
     }
@@ -185,6 +195,7 @@ TEST(MozcEngineTest, CanUseMozcCandidateWindowTest_Wayland) {
 
   EXPECT_TRUE(CallCanUseMozcCandidateWindow(R"(
     mozc_renderer {
+      use_ibus_candidate_window : False
       enabled : True
       compatible_wayland_desktop_names : ["GNOME"]
     }
@@ -195,6 +206,7 @@ TEST(MozcEngineTest, CanUseMozcCandidateWindowTest_Wayland) {
 
   EXPECT_FALSE(CallCanUseMozcCandidateWindow(R"(
     mozc_renderer {
+      use_ibus_candidate_window : False
       enabled : True
       compatible_wayland_desktop_names : ["GNOME"]
     }
@@ -205,6 +217,7 @@ TEST(MozcEngineTest, CanUseMozcCandidateWindowTest_Wayland) {
 
   EXPECT_FALSE(CallCanUseMozcCandidateWindow(R"(
     mozc_renderer {
+      use_ibus_candidate_window : False
       enabled : True
       compatible_wayland_desktop_names : ["GNOME"]
     }
@@ -214,6 +227,7 @@ TEST(MozcEngineTest, CanUseMozcCandidateWindowTest_Wayland) {
 
   EXPECT_TRUE(CallCanUseMozcCandidateWindow(R"(
     mozc_renderer {
+      use_ibus_candidate_window : False
       enabled : True
       compatible_wayland_desktop_names : ["GNOME", "KDE"]
     }

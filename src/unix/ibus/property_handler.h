@@ -87,7 +87,7 @@ class PropertyHandler {
   // Returns original composition mode before.
   commands::CompositionMode GetOriginalCompositionMode() const;
 
-  // Updates the Toolbar menu item label (Show/Hide toolbar). Call after toggling.
+  // Updates the Toolbar menu item toggle state. Call after toggling.
   void UpdateToolbarLabel(IbusEngineWrapper *engine, bool toolbar_visible);
 
  private:

@@ -118,7 +118,9 @@ def GetIbusConfigTextProto(engines, branding=None):
   active_on_launch = 'True' if (branding == 'marinaMozc') else 'False'
   output.append('active_on_launch: ' + active_on_launch)
   output.append('mozc_renderer {')
-  output.append("  # Set 'False' to use IBus' candidate window.")
+  output.append("  # Candidate window: True = IBus (default), False = Mozc when available.")
+  output.append('  use_ibus_candidate_window : True')
+  output.append("  # Set 'False' to use IBus' candidate window (legacy; use_ibus_candidate_window overrides).")
   output.append('  enabled : True')
   output.append("  # For Wayland sessions, 'mozc_renderer' will be used if and "
                 "only if any value")

@@ -299,7 +299,8 @@ commands::CompositionMode ConvertCompositionMode(
     case ibus::Engine::HIRAGANA:
       return commands::HIRAGANA;
     case ibus::Engine::FULL_KATAKANA:
-      return commands::FULL_KATAKANA;
+      // Redirect full katakana to manyoshu (menu still shows "Katakana").
+      return commands::MANYOSHU;
     case ibus::Engine::HALF_ASCII:
       return commands::HALF_ASCII;
     case ibus::Engine::FULL_ASCII:

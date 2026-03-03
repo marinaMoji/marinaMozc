@@ -158,8 +158,69 @@ bool Converter::StartConversion(const ConversionRequest& request,
     return false;
   }
 
-  segments->InitForConvert(key);
-  ApplyConversion(segments, request);
+  absl::Span<const size_t> boundaries = request.segment_boundaries();
+  const size_t key_len = Util::CharsLen(key);
+
+  // Filter to valid boundaries and build split positions: (0, b1, b2, ..., end).
+  std::vector<size_t> split_pos;
+  if (!boundaries.empty()) {
+    for (size_t b : boundaries) {
+      if (b > 0 && b < key_len) {
+        split_pos.push_back(b);
+      }
+    }
+    std::sort(split_pos.begin(), split_pos.end());
+    split_pos.erase(std::unique(split_pos.begin(), split_pos.end()),
+                    split_pos.end());
+  }
+
+  if (split_pos.empty()) {
+    segments->InitForConvert(key);
+    ApplyConversion(segments, request);
+    return IsValidSegments(request, *segments);
+  }
+
+  // Force segment boundaries: convert each part separately and merge.
+  segments->set_max_history_segments_size(4);
+  segments->clear_conversion_segments();
+  size_t pos = 0;
+  for (const size_t next : split_pos) {
+    std::string part =
+        std::string(Util::Utf8SubString(key, pos, next - pos));
+    pos = next;
+    ConversionRequest part_request =
+        ConversionRequestBuilder()
+            .SetConversionRequestView(request)
+            .SetKey(part)
+            .SetSegmentBoundaries({})
+            .Build();
+    Segments temp;
+    temp.InitForConvert(part);
+    if (!immutable_converter_->Convert(part_request, &temp)) {
+      MOZC_VLOG(1) << "Convert failed for key part: " << part;
+    }
+    Segment* dst = segments->add_segment();
+    *dst = temp.conversion_segment(0);
+  }
+  // Last part: from pos to end.
+  if (pos < key_len) {
+    std::string part =
+        std::string(Util::Utf8SubString(key, pos, key_len - pos));
+    ConversionRequest part_request =
+        ConversionRequestBuilder()
+            .SetConversionRequestView(request)
+            .SetKey(part)
+            .SetSegmentBoundaries({})
+            .Build();
+    Segments temp;
+    temp.InitForConvert(part);
+    if (!immutable_converter_->Convert(part_request, &temp)) {
+      MOZC_VLOG(1) << "Convert failed for key part: " << part;
+    }
+    Segment* dst = segments->add_segment();
+    *dst = temp.conversion_segment(0);
+  }
+  ApplyPostProcessing(request, segments);
   return IsValidSegments(request, *segments);
 }
 

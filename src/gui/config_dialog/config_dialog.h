@@ -90,6 +90,9 @@ class ConfigDialog : public QDialog, private Ui::ConfigDialog {
   void ConvertFromProto(const config::Config &config);
   bool Update();
   void Reload();
+  // Linux/IBus only: load/save candidate window choice from ibus_config.textproto.
+  void LoadIbusCandidateWindowFromFile();
+  void SaveIbusCandidateWindowToFile() const;
 
   std::unique_ptr<client::ClientInterface> client_;
   std::string custom_keymap_table_;

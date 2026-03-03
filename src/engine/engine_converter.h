@@ -320,6 +320,15 @@ class EngineConverter : public EngineConverterInterface {
   // candidates.
   void UpdateCandidateList();
 
+  // In CONVERSION mode, appends prefix (sub-segment) candidates to segments
+  // with key length > 1 so the user can split a segment by selecting one.
+  void InjectPrefixCandidatesForConversionSegments();
+
+  // Fills candidates for a segment that has key but no candidates (e.g. after
+  // CommitPartialSuggestionSegmentValue). Used for the remainder segment.
+  bool FillCandidatesForSegment(const commands::Context& context,
+                               size_t segment_index);
+
   // Returns the candidate index to be used by the converter.
   int GetCandidateIndexForConverter(size_t segment_index) const;
 

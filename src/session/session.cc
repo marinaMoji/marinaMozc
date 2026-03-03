@@ -31,10 +31,13 @@
 
 #include "session/session.h"
 
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <fstream>
 #include <memory>
 #include <optional>
+#include <sstream>
 #include <string>
 #include <utility>
 #include <vector>
@@ -527,6 +530,32 @@ bool Session::TestSendKey(commands::Command* command) {
   return DoNothing(command);
 }
 
+namespace {
+// Detect break-key (ToggleBoundary) by key event so it works even if keymap
+// lookup fails (e.g. key code or modifier encoding differs).
+bool IsBreakKey(const commands::KeyEvent& key) {
+  const uint32_t mod = KeyEventUtil::GetModifiers(key);
+  constexpr uint32_t kCtrl = commands::KeyEvent::CTRL;
+  constexpr uint32_t kShift = commands::KeyEvent::SHIFT;
+  if ((mod & kCtrl) == 0 || (mod & kShift) == 0) return false;
+  if (key.has_special_key() &&
+      key.special_key() == commands::KeyEvent::INSERT) {
+    return true;
+  }
+  if (key.has_key_code()) {
+    const uint32_t c = key.key_code();
+    // '4' (QWERTY), '$' (US Shift+4), ''' (AZERTY Shift+4 on same physical key)
+    if (c == 0x34 || c == 0x24 || c == 0x27) return true;
+  }
+  return false;
+}
+
+// Debounce: break key is often delivered twice (e.g. key-down and key-up).
+// If we toggle on both, the second event removes the boundary; only the first
+// should toggle. Coalesce events within this window (ms).
+constexpr int kBreakKeyDebounceMs = 250;
+}  // namespace
+
 bool Session::SendKey(commands::Command* command) {
   UpdateTime();
   UpdatePreferences(command);
@@ -549,6 +578,50 @@ bool Session::SendKey(commands::Command* command) {
       result->set_value(odoriji_commit_result);
     }
     command->mutable_output()->set_consumed(true);
+    return true;
+  }
+
+  // Handle break-key (toggle boundary) at top level when composing, so it
+  // always runs regardless of suggestion/conversion keymap or state nuances.
+  // #region agent log
+  {
+    const bool is_break = IsBreakKey(command->input().key());
+    const uint32_t state = context_->state();
+    const size_t comp_len = context_->composer().GetLength();
+    const bool entered = is_break && (state == ImeContext::COMPOSITION) && (comp_len > 0);
+    std::ostringstream out;
+    out << "{\"sessionId\":\"1b2dce\",\"location\":\"session.cc:SendKey\",\"message\":\"break_key_check\",\"data\":{\"is_break_key\":" << (is_break ? "true" : "false") << ",\"state\":" << state << ",\"composer_len\":" << comp_len << ",\"entered_block\":" << (entered ? "true" : "false") << "},\"timestamp\":" << std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count() << ",\"hypothesisId\":\"H1\"}\n";
+    std::ofstream f("/home/d/Python/marinaMoji/marinaMoji_Repo/.cursor/debug-1b2dce.log", std::ios::app);
+    if (f) { f << out.str(); }
+  }
+  // #endregion
+  if (IsBreakKey(command->input().key()) &&
+      context_->state() == ImeContext::COMPOSITION &&
+      context_->composer().GetLength() > 0) {
+    // Debounce: key is often delivered twice (key-down + key-up); only first toggles.
+    using Clock = std::chrono::steady_clock;
+    static Clock::time_point last_break_key_time;
+    static bool last_break_key_valid = false;
+    const auto now = Clock::now();
+    const bool within_debounce =
+        last_break_key_valid &&
+        (std::chrono::duration_cast<std::chrono::milliseconds>(
+             now - last_break_key_time).count() < kBreakKeyDebounceMs);
+    if (!within_debounce) {
+      last_break_key_time = now;
+      last_break_key_valid = true;
+      context_->mutable_composer()->ToggleBoundaryAtCursor();
+    }
+    OutputComposition(command);
+    // #region agent log
+    {
+      const size_t n = context_->composer().GetLength();
+      std::ostringstream out;
+      out << "{\"sessionId\":\"1b2dce\",\"location\":\"session.cc:SendKey\",\"message\":\"break_key_handled\",\"data\":{\"after_composer_len\":" << n << ",\"within_debounce\":" << (within_debounce ? "true" : "false") << "},\"timestamp\":" << std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count() << ",\"hypothesisId\":\"H1\"}\n";
+      std::ofstream f("/home/d/Python/marinaMoji/marinaMoji_Repo/.cursor/debug-1b2dce.log", std::ios::app);
+      if (f) { f << out.str(); }
+    }
+    // #endregion
     return true;
   }
 
@@ -759,6 +832,13 @@ bool Session::SendKeyPrecompositionState(commands::Command* command) {
 }
 
 bool Session::SendKeyCompositionState(commands::Command* command) {
+  // Handle break-key explicitly so it works regardless of keymap matching.
+  if (IsBreakKey(command->input().key())) {
+    context_->mutable_composer()->ToggleBoundaryAtCursor();
+    OutputComposition(command);
+    return true;
+  }
+
   keymap::CompositionState::Commands key_command;
   const keymap::KeyMapManager* keymap = &context_->GetKeyMapManager();
   const bool result =
@@ -889,6 +969,11 @@ bool Session::SendKeyCompositionState(commands::Command* command) {
       return ToggleManyoshuHiragana(command);
     case keymap::CompositionState::INSERT_MACRON_VOWEL:
       return InsertMacronVowel(command);
+    case keymap::CompositionState::TOGGLE_BOUNDARY:
+      context_->mutable_composer()->ToggleBoundaryAtCursor();
+      // Always use OutputComposition so preedit (with "|") comes directly from composer.
+      OutputComposition(command);
+      return true;
     case keymap::CompositionState::COMPOSITION_MODE_HIRAGANA:
       return CompositionModeHiragana(command);
 

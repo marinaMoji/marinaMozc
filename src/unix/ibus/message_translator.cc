@@ -61,6 +61,7 @@ const TranslationMap kUTF8JapaneseMap[] = {
     {"Input Mode", "入力モード"},
     {"Show toolbar", "ツールバーを表示"},
     {"Hide toolbar", "ツールバーを非表示"},
+    {"Toolbar", "ツールバー"},
 #ifdef MARINAMOZC
     {"About marinaMoji", "marinaMoji について"},
 #elif defined(GOOGLE_JAPANESE_INPUT_BUILD)

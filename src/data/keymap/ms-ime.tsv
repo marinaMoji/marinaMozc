@@ -23,6 +23,10 @@ Composition	Ctrl s	MoveCursorLeft
 Composition	Ctrl Shift 1	InsertOdorijiDefault
 Composition	Ctrl Shift 2	ShowOdorijiPalette
 Composition	Ctrl Shift 3	ToggleFullHalfWidth
+Composition	Ctrl Shift 4	ToggleBoundary
+Composition	Ctrl Shift $	ToggleBoundary
+Composition	Ctrl Shift '	ToggleBoundary
+Composition	Ctrl Shift Insert	ToggleBoundary
 Composition	RightShift	ToggleManyoshuHiragana
 Composition	Ctrl Alt a	InsertMacronVowel
 Composition	Ctrl Alt e	InsertMacronVowel
@@ -221,5 +225,9 @@ Precomposition	Shift Muhenkan	ToggleAlphanumericMode
 Precomposition	Shift Space	InsertAlternateSpace
 Precomposition	Space	InsertSpace
 Prediction	Ctrl Delete	DeleteSelectedCandidate
+Suggestion	Ctrl Shift 4	ToggleBoundary
+Suggestion	Ctrl Shift $	ToggleBoundary
+Suggestion	Ctrl Shift '	ToggleBoundary
+Suggestion	Ctrl Shift Insert	ToggleBoundary
 Suggestion	Down	PredictAndConvert
 Suggestion	Shift Enter	CommitFirstSuggestion

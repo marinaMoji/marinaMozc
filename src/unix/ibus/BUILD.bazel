@@ -322,11 +322,13 @@ proto_library(
     srcs = [
         "ibus_config.proto",
     ],
+    visibility = ["//gui/config_dialog:__pkg__"],
 )
 
 cc_proto_library(
     name = "ibus_config_cc_proto",
     deps = ["ibus_config_proto"],
+    visibility = ["//gui/config_dialog:__pkg__"],
 )
 
 mozc_cc_library(

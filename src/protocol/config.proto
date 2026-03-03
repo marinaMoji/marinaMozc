@@ -102,6 +102,10 @@ message Config {
   // disable all suggestion temporally.
   optional bool presentation_mode = 23 [default = false];
 
+  // Maximum number of sub-segment (prefix) candidates shown when converting
+  // a segment that can be split (e.g. "genguu" -> "gen" + "guu"). 0 = no limit.
+  optional int32 sub_segment_candidate_limit = 24 [default = 20];
+
   //////////////////////////////////////////////////////////////
   //
   // Basic features (40-79)

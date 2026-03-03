@@ -31,9 +31,12 @@
 
 #include "composer/composer.h"
 
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <fstream>
 #include <memory>
+#include <sstream>
 #include <string>
 #include <utility>
 #include <vector>
@@ -267,6 +270,39 @@ std::string GetStringForPreedit(
   return output;
 }
 
+// Inserts "|" at each valid boundary position (character index) for display.
+// Boundaries in (0, length] are shown; boundaries past the string are clamped to end.
+std::string GetStringForPreeditWithBoundaries(
+    const std::string& base,
+    absl::Span<const size_t> segment_boundaries) {
+  if (segment_boundaries.empty()) {
+    return base;
+  }
+  const size_t len = Util::CharsLen(base);
+  if (len == 0) return base;
+  std::string result;
+  result.reserve(base.size() + segment_boundaries.size() * 2);
+  size_t pos = 0;
+  for (const size_t b : segment_boundaries) {
+    if (b == 0) continue;
+    // Clamp so boundary past end of string still shows "|" at end (handles unit mismatch).
+    const size_t at = (b <= len) ? b : len;
+    if (at <= pos) continue;  // skip duplicates / out-of-order
+    result.append(Util::Utf8SubString(base, pos, at - pos));
+    result.append("|");
+    pos = at;
+  }
+  if (pos < len) {
+    result.append(Util::Utf8SubString(base, pos, len - pos));
+  }
+  // If we had boundaries but none applied (e.g. all 0), show one "|" at end.
+  if (!result.empty() && pos == 0 && !segment_boundaries.empty()) {
+    result.assign(base);
+    result.append("|");
+  }
+  return result;
+}
+
 std::string GetQueryForConversion(const Composition& composition) {
   std::string base_output = composition.GetStringWithTrimMode(FIX);
   Composer::TransformCharactersForNumbers(&base_output);
@@ -459,13 +495,15 @@ ComposerData::ComposerData(
     transliteration::TransliterationType input_mode,
     commands::Context::InputFieldType input_field_type, std::string source_text,
     std::vector<commands::SessionCommand::CompositionEvent>
-        compositions_for_handwriting)
+        compositions_for_handwriting,
+    std::vector<size_t> segment_boundaries)
     : composition_(std::move(composition)),
       position_(position),
       input_mode_(input_mode),
       input_field_type_(input_field_type),
       source_text_(std::move(source_text)),
-      compositions_for_handwriting_(std::move(compositions_for_handwriting)) {}
+      compositions_for_handwriting_(std::move(compositions_for_handwriting)),
+      segment_boundaries_(std::move(segment_boundaries)) {}
 
 transliteration::TransliterationType ComposerData::GetInputMode() const {
   return input_mode_;
@@ -476,8 +514,14 @@ ComposerData::GetHandwritingCompositions() const {
   return compositions_for_handwriting_;
 }
 
+absl::Span<const size_t> ComposerData::GetSegmentBoundaries() const {
+  return segment_boundaries_;
+}
+
 std::string ComposerData::GetStringForPreedit() const {
-  return common::GetStringForPreedit(composition_, input_field_type_);
+  std::string base =
+      common::GetStringForPreedit(composition_, input_field_type_);
+  return common::GetStringForPreeditWithBoundaries(base, segment_boundaries_);
 }
 
 std::string ComposerData::GetQueryForConversion() const {
@@ -573,8 +617,11 @@ const ComposerData& Composer::EmptyComposerData() {
 }
 
 ComposerData Composer::CreateComposerData() const {
+  std::vector<size_t> boundaries(boundary_positions_.begin(),
+                                boundary_positions_.end());
   return ComposerData(composition_, position_, input_mode_, input_field_type_,
-                      source_text_, compositions_for_handwriting_);
+                      source_text_, compositions_for_handwriting_,
+                      std::move(boundaries));
 }
 
 void Composer::Reset() {
@@ -584,6 +631,7 @@ void Composer::Reset() {
   source_text_.clear();
   timeout_threshold_msec_ = config_->composing_timeout_threshold_msec();
   compositions_for_handwriting_.clear();
+  boundary_positions_.clear();
 }
 
 void Composer::ResetInputMode() { SetInputMode(comeback_input_mode_); }
@@ -748,7 +796,9 @@ bool Composer::ProcessCompositionInput(CompositionInput input) {
     return false;
   }
 
+  const size_t insert_pos = position_;
   position_ = composition_.InsertInput(position_, std::move(input));
+  AdjustBoundariesAfterInsert(insert_pos);
   is_new_input_ = false;
   return true;
 }
@@ -926,6 +976,7 @@ bool Composer::InsertCharacterKeyEvent(const commands::KeyEvent& key) {
 
 void Composer::DeleteAt(size_t pos) {
   composition_.DeleteAt(pos);
+  AdjustBoundariesAfterDelete(pos);
   // Adjust cursor position for composition mode.
   if (position_ > pos) {
     position_--;
@@ -946,6 +997,7 @@ void Composer::DeleteRange(size_t pos, size_t length) {
 void Composer::EditErase() {
   composition_.Erase();
   position_ = 0;
+  boundary_positions_.clear();
   SetInputMode(comeback_input_mode_);
 }
 
@@ -1004,6 +1056,79 @@ void Composer::MoveCursorTo(uint32_t new_position) {
   }
 }
 
+void Composer::ToggleBoundaryAtCursor() {
+  // Store boundary in preedit character space so it matches GetStringForPreedit.
+  std::string base =
+      common::GetStringForPreedit(composition_, input_field_type_);
+  const size_t char_len = Util::CharsLen(base);
+  // #region agent log
+  {
+    size_t boundary_at = position_;
+    if (boundary_at > char_len) boundary_at = char_len;
+    std::ostringstream out;
+    out << "{\"sessionId\":\"1b2dce\",\"location\":\"composer.cc:ToggleBoundaryAtCursor\",\"message\":\"entry\",\"data\":{\"char_len\":" << char_len << ",\"position_\":" << position_ << ",\"boundary_at\":" << boundary_at << "},\"timestamp\":" << std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count() << ",\"hypothesisId\":\"H2\"}\n";
+    std::ofstream f("/home/d/Python/marinaMoji/marinaMoji_Repo/.cursor/debug-1b2dce.log", std::ios::app);
+    if (f) { f << out.str(); }
+  }
+  // #endregion
+  if (char_len == 0) return;
+  size_t boundary_at = position_;
+  if (boundary_at > char_len) boundary_at = char_len;
+  if (boundary_at == 0) return;
+  auto it = boundary_positions_.find(boundary_at);
+  const bool inserted = (it == boundary_positions_.end());
+  if (inserted) {
+    boundary_positions_.insert(boundary_at);
+  } else {
+    boundary_positions_.erase(it);
+  }
+  // #region agent log
+  {
+    std::ostringstream out;
+    out << "{\"sessionId\":\"1b2dce\",\"location\":\"composer.cc:ToggleBoundaryAtCursor\",\"message\":\"exit\",\"data\":{\"inserted\":" << (inserted ? "true" : "false") << ",\"boundary_count\":" << boundary_positions_.size() << "},\"timestamp\":" << std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count() << ",\"hypothesisId\":\"H2\"}\n";
+    std::ofstream f("/home/d/Python/marinaMoji/marinaMoji_Repo/.cursor/debug-1b2dce.log", std::ios::app);
+    if (f) { f << out.str(); }
+  }
+  // #endregion
+}
+
+void Composer::AdjustBoundariesAfterInsert(size_t pos) {
+  // Only shift boundaries strictly after insert position. A boundary exactly at
+  // pos stays (it is "before the new character" at pos).
+  std::vector<size_t> to_add;
+  for (size_t b : boundary_positions_) {
+    if (b > pos) {
+      to_add.push_back(b + 1);
+    }
+  }
+  for (auto it = boundary_positions_.begin(); it != boundary_positions_.end();) {
+    if (*it > pos) {
+      it = boundary_positions_.erase(it);
+    } else {
+      ++it;
+    }
+  }
+  for (size_t b : to_add) {
+    boundary_positions_.insert(b);
+  }
+}
+
+void Composer::AdjustBoundariesAfterDelete(size_t pos) {
+  boundary_positions_.erase(pos);
+  std::vector<size_t> to_add;
+  for (auto it = boundary_positions_.begin(); it != boundary_positions_.end();) {
+    if (*it > pos) {
+      to_add.push_back(*it - 1);
+      it = boundary_positions_.erase(it);
+    } else {
+      ++it;
+    }
+  }
+  for (size_t b : to_add) {
+    boundary_positions_.insert(b);
+  }
+}
+
 void Composer::GetPreedit(std::string* left, std::string* focused,
                           std::string* right) const {
   DCHECK(left);
@@ -1024,7 +1149,21 @@ void Composer::GetPreedit(std::string* left, std::string* focused,
 }
 
 std::string Composer::GetStringForPreedit() const {
-  return common::GetStringForPreedit(composition_, input_field_type_);
+  std::string base =
+      common::GetStringForPreedit(composition_, input_field_type_);
+  std::vector<size_t> boundaries(boundary_positions_.begin(),
+                                 boundary_positions_.end());
+  std::string result = common::GetStringForPreeditWithBoundaries(base, boundaries);
+  // #region agent log
+  if (!boundary_positions_.empty()) {
+    const bool has_pipe = (result.find('|') != std::string::npos);
+    std::ostringstream out;
+    out << "{\"sessionId\":\"1b2dce\",\"location\":\"composer.cc:GetStringForPreedit\",\"message\":\"preedit\",\"data\":{\"boundary_count\":" << boundaries.size() << ",\"result_len\":" << result.size() << ",\"has_pipe\":" << (has_pipe ? "true" : "false") << "},\"timestamp\":" << std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count() << ",\"hypothesisId\":\"H3\"}\n";
+    std::ofstream f("/home/d/Python/marinaMoji/marinaMoji_Repo/.cursor/debug-1b2dce.log", std::ios::app);
+    if (f) { f << out.str(); }
+  }
+  // #endregion
+  return result;
 }
 
 std::string Composer::GetStringForSubmission() const {

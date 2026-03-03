@@ -106,13 +106,6 @@ constexpr MozcEngineProperty kMozcEngineProperties[] = {
         "_ｱ",
         "katakana_half.png",
     },
-    {
-        commands::MANYOSHU,
-        "InputMode.Manyoshu",
-        "万葉集",
-        "万",
-        "hiragana.png",
-    },
 };
 
 struct MozcEngineToolProperty {
@@ -366,10 +359,8 @@ void PropertyHandler::AppendOdorijiPalettePropertyToPanel() {
 }
 
 void PropertyHandler::AppendToolbarPropertyToPanel() {
-  // Default: toolbar starts hidden, so menu shows "Show toolbar".
-  const std::string label =
-      translator_->MaybeTranslate("Show toolbar");
-  prop_toolbar_.Initialize("Toolbar", PROP_TYPE_NORMAL, label, "" /* icon */,
+  const std::string label = translator_->MaybeTranslate("Toolbar");
+  prop_toolbar_.Initialize("Toolbar", PROP_TYPE_TOGGLE, label, "" /* icon */,
                            PROP_STATE_UNCHECKED, nullptr);
   prop_toolbar_.RefSink();
   prop_root_.Append(&prop_toolbar_);
@@ -380,10 +371,8 @@ void PropertyHandler::UpdateToolbarLabel(IbusEngineWrapper *engine,
   if (!prop_toolbar_.IsInitialized()) {
     return;
   }
-  const std::string label = toolbar_visible
-                                ? translator_->MaybeTranslate("Hide toolbar")
-                                : translator_->MaybeTranslate("Show toolbar");
-  prop_toolbar_.SetLabel(label);
+  prop_toolbar_.SetState(toolbar_visible ? PROP_STATE_CHECKED
+                                         : PROP_STATE_UNCHECKED);
   engine->UpdateProperty(&prop_toolbar_);
 }
 
@@ -419,9 +408,14 @@ void PropertyHandler::UpdateCompositionModeIcon(
     return;
   }
 
+  // Manyoshu is not in the menu; show it as "Katakana" (FULL_KATAKANA entry).
+  const commands::CompositionMode mode_for_display =
+      (new_composition_mode == commands::MANYOSHU) ? commands::FULL_KATAKANA
+                                                   : new_composition_mode;
+
   const MozcEngineProperty *entry = nullptr;
   for (const MozcEngineProperty &property : kMozcEngineProperties) {
-    if (property.composition_mode == new_composition_mode) {
+    if (property.composition_mode == mode_for_display) {
       entry = &property;
       break;
     }
@@ -474,6 +468,10 @@ void PropertyHandler::SetCompositionMode(
     client_->SendCommand(command, &output);
   } else {
     command.set_type(commands::SessionCommand::SWITCH_COMPOSITION_MODE);
+    // Redirect full katakana to manyoshu (menu still shows "Katakana").
+    if (composition_mode == commands::FULL_KATAKANA) {
+      composition_mode = commands::MANYOSHU;
+    }
     command.set_composition_mode(composition_mode);
     client_->SendCommand(command, &output);
   }

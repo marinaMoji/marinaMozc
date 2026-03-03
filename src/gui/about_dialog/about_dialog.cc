@@ -121,11 +121,16 @@ AboutDialog::AboutDialog(QWidget *parent)
   // marinaMoji: logo on left only (includes product name); credit on two lines.
   label->setVisible(false);
   label_credits->setVisible(false);  // We use only label_6 for credit.
-  // Two lines: fork credit, then Google copyright (with wrapping for narrow windows).
+  // Single line: fork credit and Google copyright; both "Mozc" link to upstream repo.
+  label_6->setTextFormat(Qt::RichText);
   label_6->setText(
       QObject::tr("marinaMoji is a fork of Mozc by M. Pandolfino and D.P. Morgan.\n"
-                  "Mozc © Google LLC."));
+                  "<a href=\"https://github.com/google/mozc\">Mozc</a> © Google LLC."));
   label_6->setWordWrap(true);
+  connect(label_6, &QLabel::linkActivated, this, &AboutDialog::linkActivated);
+  // Let the label use the full width so the text can sit on one line (with margin).
+  label_6->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+  gridLayout_3->setColumnStretch(0, 1);
   // Load toolbar logo SVG and render at ~2x line height (keep aspect ratio).
   QImageReader reader(QLatin1String(":/marinamozc_logo.svg"));
   QImage svgImage = reader.read();

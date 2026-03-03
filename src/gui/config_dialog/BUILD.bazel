@@ -223,6 +223,10 @@ mozc_cc_qt_library(
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/types:span",
     ] + mozc_select(
+        linux = [
+            "//base/protobuf:text_format",
+            "//unix/ibus:ibus_config_cc_proto",
+        ],
         macos = [
             "//base/mac:mac_util",
         ],

@@ -69,6 +69,13 @@
 #include "base/mac/mac_util.h"
 #endif  // __APPLE__
 
+#if defined(__linux__)
+#include "base/file_util.h"
+#include "base/protobuf/text_format.h"
+#include "base/system_util.h"
+#include "unix/ibus/ibus_config.pb.h"
+#endif  // __linux__
+
 namespace {
 template <typename T>
 void Connect(const QList<T *> &objects, const char *signal,
@@ -108,6 +115,12 @@ ConfigDialog::ConfigDialog()
   miscDefaultIMEWidget->setVisible(false);
   miscAdministrationWidget->setVisible(false);
   miscStartupWidget->setVisible(false);
+  // Candidate window: IBus (default) or Mozc. Only relevant on Linux/IBus.
+  candidateWindowComboBox->addItem(tr("IBus"), true);   // use_ibus_candidate_window
+  candidateWindowComboBox->addItem(tr("Mozc"), false);
+  LoadIbusCandidateWindowFromFile();
+#else
+  miscCandidateWindowWidget->setVisible(false);
 #endif  // __linux__
 
 #ifdef NDEBUG
@@ -115,11 +128,16 @@ ConfigDialog::ConfigDialog()
   miscLoggingWidget->setVisible(false);
 
 #if defined(__linux__)
-  // The last "misc" tab has no valid configs on Linux
-  constexpr int kMiscTabIndex = 6;
-  configDialogTabWidget->removeTab(kMiscTabIndex);
+  // Keep the Misc tab on Linux so users can set sub-segment candidate limit.
+  // (Other Misc options are hidden on Linux.)
 #endif  // __linux__
 #endif  // NDEBUG
+
+  // Sub-segment candidate limit: 0 = no limit, else max candidates per prefix.
+  subSegmentCandidateLimitComboBox->addItem(tr("No limit"), 0);
+  subSegmentCandidateLimitComboBox->addItem(QStringLiteral("20"), 20);
+  subSegmentCandidateLimitComboBox->addItem(QStringLiteral("50"), 50);
+  subSegmentCandidateLimitComboBox->addItem(QStringLiteral("100"), 100);
 
   suggestionsSizeSpinBox->setRange(1, 9);
 
@@ -343,6 +361,10 @@ void ConfigDialog::Reload() {
   }
   ConvertFromProto(config);
 
+#if defined(__linux__)
+  LoadIbusCandidateWindowFromFile();
+#endif  // __linux__
+
   SelectAutoConversionSetting(static_cast<int>(config.use_auto_conversion()));
 
   initial_preedit_method_ = static_cast<int>(config.preedit_method());
@@ -390,6 +412,10 @@ bool ConfigDialog::Update() {
     QMessageBox::critical(this, windowTitle(), tr("Failed to update config"));
   }
 
+#if defined(__linux__)
+  SaveIbusCandidateWindowToFile();
+#endif  // __linux__
+
 #ifdef _WIN32
   if (!WinUtil::SetIMEHotKeyDisabled(IMEHotKeyDisabledCheckBox->isChecked())) {
     // Do not show any dialog here, since this operation will not fail
@@ -431,6 +457,49 @@ void ConfigDialog::GetSendStatsCheckBox() const {
   StatsConfigUtil::SetEnabled(val);
 #endif  // _WIN32
 }
+
+#if defined(__linux__)
+void ConfigDialog::LoadIbusCandidateWindowFromFile() {
+  const std::string path = FileUtil::JoinPath(
+      SystemUtil::GetUserProfileDirectory(), "ibus_config.textproto");
+  absl::StatusOr<std::string> content = FileUtil::GetContents(path);
+  if (!content.ok()) {
+    candidateWindowComboBox->setCurrentIndex(0);  // Default: IBus
+    return;
+  }
+  ibus::Config config;
+  if (!mozc::protobuf::TextFormat::ParseFromString(*content, &config)) {
+    candidateWindowComboBox->setCurrentIndex(0);
+    return;
+  }
+  const bool use_ibus = config.has_mozc_renderer()
+                            ? config.mozc_renderer().use_ibus_candidate_window()
+                            : true;
+  const int idx = candidateWindowComboBox->findData(use_ibus);
+  candidateWindowComboBox->setCurrentIndex(idx >= 0 ? idx : 0);
+}
+
+void ConfigDialog::SaveIbusCandidateWindowToFile() const {
+  const std::string path = FileUtil::JoinPath(
+      SystemUtil::GetUserProfileDirectory(), "ibus_config.textproto");
+  absl::StatusOr<std::string> content = FileUtil::GetContents(path);
+  ibus::Config config;
+  if (content.ok()) {
+    mozc::protobuf::TextFormat::ParseFromString(*content, &config);
+  }
+  if (!config.has_mozc_renderer()) {
+    config.mutable_mozc_renderer();
+  }
+  const bool use_ibus =
+      candidateWindowComboBox->currentData().toBool();
+  config.mutable_mozc_renderer()->set_use_ibus_candidate_window(use_ibus);
+  std::string out;
+  if (!mozc::protobuf::TextFormat::PrintToString(config, &out)) {
+    return;
+  }
+  FileUtil::SetContents(path, out);
+}
+#endif  // __linux__
 
 #define SET_COMBOBOX(combobox, enumname, field)                    \
   do {                                                             \
@@ -558,10 +627,15 @@ void ConfigDialog::ConvertFromProto(const config::Config &config) {
   SET_CHECKBOX(incognitoModeCheckBox, incognito_mode);
   SET_CHECKBOX(presentationModeCheckBox, presentation_mode);
 
-  // tab6
+  // tab6 (Misc)
   SET_COMBOBOX(verboseLevelComboBox, int, verbose_level);
   SET_CHECKBOX(checkDefaultCheckBox, check_default);
   SET_COMBOBOX(yenSignComboBox, YenSignCharacter, yen_sign_character);
+  {
+    const int limit = config.sub_segment_candidate_limit();
+    const int idx = subSegmentCandidateLimitComboBox->findData(limit);
+    subSegmentCandidateLimitComboBox->setCurrentIndex(idx >= 0 ? idx : 1);
+  }
 
   characterFormEditor->Load(config);
 
@@ -651,10 +725,12 @@ void ConfigDialog::ConvertToProto(config::Config *config) const {
   GET_CHECKBOX(incognitoModeCheckBox, incognito_mode);
   GET_CHECKBOX(presentationModeCheckBox, presentation_mode);
 
-  // tab6
+  // tab6 (Misc)
   config->set_verbose_level(verboseLevelComboBox->currentIndex());
   GET_CHECKBOX(checkDefaultCheckBox, check_default);
   GET_COMBOBOX(yenSignComboBox, YenSignCharacter, yen_sign_character);
+  config->set_sub_segment_candidate_limit(
+      subSegmentCandidateLimitComboBox->currentData().toInt());
 
   characterFormEditor->Save(config);
 }

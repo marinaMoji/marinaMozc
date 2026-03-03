@@ -201,9 +201,13 @@ bool IbusConfig::IsActiveOnLaunch() const {
 
 bool IbusConfig::IsMozcRendererEnabled() const {
   if (!config_.has_mozc_renderer()) {
-    return true;
+    return false;  // No block = use IBus candidate window (default).
   }
-  return config_.mozc_renderer().enabled();
+  const auto &mr = config_.mozc_renderer();
+  if (mr.use_ibus_candidate_window()) {
+    return false;  // Explicit choice for IBus candidate window.
+  }
+  return mr.enabled();
 }
 
 std::vector<std::string>

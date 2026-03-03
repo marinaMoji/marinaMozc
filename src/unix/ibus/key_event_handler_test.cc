@@ -377,13 +377,19 @@ TEST_F(KeyEventHandlerTest, LeftRightModifiers) {
   EXPECT_MODIFIERS_TO_BE_SENT(commands::KeyEvent::SHIFT);
 }
 
-TEST_F(KeyEventHandlerTest, RightShiftAloneSentOnKeyDown) {
-  // Right Shift pressed alone is sent on key down for ToggleManyoshuHiragana.
+TEST_F(KeyEventHandlerTest, RightShiftAloneSentOnKeyUp) {
+  // Right Shift pressed alone is sent on key up for ToggleManyoshuHiragana
+  // (so it only toggles when released by itself, not when used to capitalize).
   commands::KeyEvent key;
   key.add_modifier_keys(commands::KeyEvent::SHIFT);
   key.add_modifier_keys(commands::KeyEvent::RIGHT_SHIFT);
-  EXPECT_TRUE(ProcessKey(false, IBUS_Shift_R, &key));
-  EXPECT_FALSE(IsPressed(IBUS_Shift_R));  // not stored, key was sent
+  EXPECT_FALSE(ProcessKey(false, IBUS_Shift_R, &key));  // down: not sent
+  key.Clear();
+  key.add_modifier_keys(commands::KeyEvent::SHIFT);
+  key.add_modifier_keys(commands::KeyEvent::RIGHT_SHIFT);
+  EXPECT_TRUE(ProcessKey(true, IBUS_Shift_R, &key));  // up: sent
+  EXPECT_NO_MODIFIERS_PRESSED();
+  EXPECT_MODIFIERS_TO_BE_SENT(kNoModifiers);
 }
 
 TEST_F(KeyEventHandlerTest, ProcessModifiers) {

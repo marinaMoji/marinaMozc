@@ -152,9 +152,13 @@ If it does not appear, make sure `ibus-daemon` is running and check for errors w
 
 ---
 
-## 5. Switch to IBUS candidate window handling
+## 5. Candidate window (IBus vs Mozc)
 
-The Mozc candidate windows provide more details than in IBUS, but they are much more convoluted and, on DPM's machine, have some problem with proper positioning. We can turn this off and default to IBUS. To try this, do the following in the command line:
+By default, marinaMozc uses the **IBus** candidate window (equivalent to `MOZC_IBUS_CANDIDATE_WINDOW=ibus`). The Mozc candidate window offers more detail but can have positioning issues on some setups.
+
+You can change this in **Properties → Misc → Candidate window** (dropdown: IBus / Mozc). The choice is stored in `~/.config/mozc/ibus_config.textproto` and applies after switching input method away and back, or restarting IBus.
+
+To force IBus from the command line when starting the daemon:
 
 ```bash
 ibus exit
