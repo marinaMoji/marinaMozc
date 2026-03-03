@@ -53,6 +53,8 @@ constexpr char kMozcEnginePropertyKey[] = "ibus-mozc-aux-data";
 
 // Icon path for MozcTool
 constexpr char kMozcToolIconPath[] = "tool.png";
+// Engine/product icon (marinaMoji square) shown in IME panel when toolbar is active.
+constexpr char kProductIconPath[] = "product_icon.png";
 
 struct MozcEngineProperty {
   commands::CompositionMode composition_mode;
@@ -371,9 +373,14 @@ void PropertyHandler::UpdateToolbarLabel(IbusEngineWrapper *engine,
   if (!prop_toolbar_.IsInitialized()) {
     return;
   }
+  toolbar_visible_ = toolbar_visible;
   prop_toolbar_.SetState(toolbar_visible ? PROP_STATE_CHECKED
                                          : PROP_STATE_UNCHECKED);
   engine->UpdateProperty(&prop_toolbar_);
+  // Refresh IME panel symbol/icon so it shows "ja" + product icon when toolbar is on.
+  const commands::CompositionMode visible_mode =
+      is_activated_ ? original_composition_mode_ : kImeOffCompositionMode;
+  UpdateCompositionModeIcon(engine, visible_mode);
 }
 
 void PropertyHandler::Update(IbusEngineWrapper *engine,
@@ -405,6 +412,15 @@ void PropertyHandler::Update(IbusEngineWrapper *engine,
 void PropertyHandler::UpdateCompositionModeIcon(
     IbusEngineWrapper *engine, commands::CompositionMode new_composition_mode) {
   if (!prop_composition_mode_.IsInitialized()) {
+    return;
+  }
+
+  // When toolbar is active, show "ja" and product icon in IME panel (Cinnamon etc.).
+  if (toolbar_visible_) {
+    prop_composition_mode_.SetIcon(GetIconPath(kProductIconPath));
+    prop_composition_mode_.SetSymbol("ja");
+    prop_composition_mode_.SetLabel("ja");
+    engine->UpdateProperty(&prop_composition_mode_);
     return;
   }
 

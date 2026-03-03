@@ -34,6 +34,12 @@ void MozcToolbarUpdate(const commands::Output& output);
 // Returns true if the toolbar module is available (GTK linked).
 bool MozcToolbarAvailable();
 
+// Load saved toolbar visibility. True = on, false = off. Default true (on) for first install.
+bool MozcToolbarLoadVisiblePreference();
+
+// Save toolbar visibility so it persists across restarts (off until user toggles on again).
+void MozcToolbarSaveVisiblePreference(bool visible);
+
 }  // namespace ibus
 }  // namespace mozc
 

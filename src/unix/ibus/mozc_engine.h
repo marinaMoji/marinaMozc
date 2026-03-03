@@ -101,6 +101,14 @@ class MozcEngine : public EngineInterface {
   // command and updates UI using the last focused engine.
   void SendToolbarSessionCommand(commands::SessionCommand::CommandType type);
 
+  // Called by the toolbar when the user picks a composition mode from the
+  // mode-indicator menu. Switches mode and updates panel/toolbar.
+  void SetCompositionModeFromToolbar(commands::CompositionMode mode);
+
+  // Called by the toolbar dict button. Launches Mozc tool by mode (e.g.
+  // "word_register_dialog", "dictionary_tool"). Returns true if launched.
+  bool LaunchToolFromToolbar(const char* mode);
+
  private:
   // Updates the preedit text and the candidate window and inserts result
   // based on the content of |output|.
@@ -158,8 +166,8 @@ class MozcEngine : public EngineInterface {
   IBusEngine *current_engine_ = nullptr;
 
   // When true, show toolbar on focus; toggled by IME menu "Hide/Show toolbar".
-  // marinaMozc: start hidden (user can show via menu).
-  bool toolbar_visible_ = false;
+  // Default true (on) for first install; thereafter loaded/saved via toolbar.conf.
+  bool toolbar_visible_ = true;
 
   friend class MozcEngineTestPeer;
 };

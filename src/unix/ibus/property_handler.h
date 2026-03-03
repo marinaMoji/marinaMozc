@@ -117,6 +117,7 @@ class PropertyHandler {
   commands::CompositionMode original_composition_mode_;
   bool is_activated_;
   bool is_disabled_;
+  bool toolbar_visible_ = false;  // When true, panel shows "ja" + product icon (Cinnamon etc.)
 };
 
 }  // namespace ibus

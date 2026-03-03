@@ -250,6 +250,11 @@ MozcEngine::MozcEngine()
       ibus_config_.IsActiveOnLaunch(), client_.get(),
       MozcToolbarAvailable());
 
+  // Toolbar on by default for new install; load saved preference if present.
+  if (MozcToolbarAvailable()) {
+    toolbar_visible_ = MozcToolbarLoadVisiblePreference();
+  }
+
   // TODO(yusukes): write a unit test to check if the capability is set
   // as expected.
 }
@@ -439,10 +444,11 @@ bool MozcEngine::ProcessKeyEvent(IbusEngineWrapper *engine, uint keyval,
 void MozcEngine::PropertyActivate(IbusEngineWrapper *engine,
                                   const char *property_name,
                                   uint property_state) {
-  // Hide/Show toolbar: toggle visibility and update menu label.
+  // Hide/Show toolbar: toggle visibility, persist choice, and update menu label.
   if (property_name != nullptr && strcmp(property_name, "Toolbar") == 0 &&
       MozcToolbarAvailable()) {
     toolbar_visible_ = !toolbar_visible_;
+    MozcToolbarSaveVisiblePreference(toolbar_visible_);
     if (toolbar_visible_) {
       MozcToolbarShow(this);
     } else {
@@ -514,6 +520,39 @@ void MozcEngine::SendToolbarSessionCommand(
     IbusEngineWrapper wrapper(current_engine_);
     UpdateAll(&wrapper, output);
   }
+}
+
+void MozcEngine::SetCompositionModeFromToolbar(
+    commands::CompositionMode mode) {
+  commands::SessionCommand command;
+  commands::Output output;
+  // Direct input = turn IME off. Session only supports this via TURN_OFF_IME
+  // (SWITCH_COMPOSITION_MODE with DIRECT is unimplemented there).
+  if (mode == commands::DIRECT) {
+    command.set_type(commands::SessionCommand::TURN_OFF_IME);
+    command.set_composition_mode(
+        property_handler_->GetOriginalCompositionMode());
+  } else {
+    command.set_type(commands::SessionCommand::SWITCH_COMPOSITION_MODE);
+    commands::CompositionMode cmd_mode = mode;
+    if (cmd_mode == commands::FULL_KATAKANA) {
+      cmd_mode = commands::MANYOSHU;
+    }
+    command.set_composition_mode(cmd_mode);
+  }
+  if (!client_->SendCommand(command, &output)) {
+    LOG(ERROR) << "SetCompositionModeFromToolbar SendCommand failed";
+    return;
+  }
+  if (current_engine_ != nullptr) {
+    IbusEngineWrapper wrapper(current_engine_);
+    UpdateAll(&wrapper, output);
+  }
+}
+
+bool MozcEngine::LaunchToolFromToolbar(const char* mode) {
+  if (!mode || !client_) return false;
+  return client_->LaunchTool(std::string(mode), "");
 }
 
 bool MozcEngine::UpdateAll(IbusEngineWrapper *engine,

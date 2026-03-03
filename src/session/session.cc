@@ -46,6 +46,7 @@
 #include "absl/container/flat_hash_set.h"
 #include "absl/log/check.h"
 #include "absl/log/log.h"
+#include "absl/strings/str_replace.h"
 #include "absl/strings/string_view.h"
 #include "absl/time/time.h"
 #include "base/clock.h"
@@ -3078,6 +3079,52 @@ bool Session::PredictAndConvert(commands::Command* command) {
   return true;
 }
 
+namespace {
+// UTF-8 for 々 (U+3005 iteration mark), used in dictionary candidates/results.
+constexpr char kOdorijiIterationMark[] = "\xe3\x80\x85";
+
+void ReplaceOdorijiInCandidateWindow(commands::CandidateWindow* cw,
+                                     absl::string_view replacement) {
+  if (!cw) return;
+  for (int i = 0; i < cw->candidate_size(); ++i) {
+    std::string value = absl::StrReplaceAll(
+        cw->candidate(i).value(),
+        {{kOdorijiIterationMark, replacement}});
+    cw->mutable_candidate(i)->set_value(std::move(value));
+  }
+  if (cw->has_sub_candidate_window()) {
+    ReplaceOdorijiInCandidateWindow(cw->mutable_sub_candidate_window(),
+                                    replacement);
+  }
+}
+
+void ReplaceOdorijiInOutput(commands::Output* output, int default_index) {
+  if (!output) return;
+  absl::string_view replacement(
+      OdorijiPalette::GetCharacter(static_cast<size_t>(default_index)));
+  // Preedit: composition shown after candidate selection, before Enter (stage between selection and commit).
+  if (output->has_preedit()) {
+    commands::Preedit* preedit = output->mutable_preedit();
+    for (int i = 0; i < preedit->segment_size(); ++i) {
+      std::string value = absl::StrReplaceAll(
+          preedit->segment(i).value(),
+          {{kOdorijiIterationMark, replacement}});
+      preedit->mutable_segment(i)->set_value(std::move(value));
+    }
+  }
+  if (output->has_result()) {
+    std::string value = absl::StrReplaceAll(
+        output->result().value(),
+        {{kOdorijiIterationMark, replacement}});
+    output->mutable_result()->set_value(std::move(value));
+  }
+  if (output->has_candidate_window()) {
+    ReplaceOdorijiInCandidateWindow(output->mutable_candidate_window(),
+                                    replacement);
+  }
+}
+}  // namespace
+
 void Session::OutputFromState(commands::Command* command) {
   if (context_->state() == ImeContext::DIRECT) {
     OutputMode(command);
@@ -3142,6 +3189,12 @@ void Session::Output(commands::Command* command) {
       cw->set_focused_index(static_cast<uint32_t>(new_focused));
       cw->set_size(static_cast<uint32_t>(kept.size()));
     }
+  }
+  // Replace 々 (iteration mark) in dictionary candidates and results with the
+  // user's default odoriji from the Odoriji Palette (like manyoshu display conversion).
+  // Skip when the odoriji palette is visible so we don't alter the palette's own list.
+  if (!odoriji_palette_visible_) {
+    ReplaceOdorijiInOutput(command->mutable_output(), odoriji_default_index_);
   }
 }
 

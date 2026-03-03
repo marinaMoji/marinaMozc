@@ -39,9 +39,14 @@ constexpr int kToolbarLogoWidth = 120;
 GtkWidget* g_toolbar_window = nullptr;
 GtkWidget* g_toolbar_frame = nullptr;
 GtkWidget* g_toolbar_box = nullptr;
+GtkWidget* g_lead_cell = nullptr;
 GtkWidget* g_logo_cell = nullptr;
-GtkWidget* g_trad_toggle = nullptr;
+GtkWidget* g_trail_cell = nullptr;
+GtkWidget* g_mode_indicator_cell = nullptr;
+GtkWidget* g_mode_indicator_image = nullptr;
+GtkWidget* g_trad_btn = nullptr;
 GtkWidget* g_odoriji_btn = nullptr;
+GtkWidget* g_dict_cell = nullptr;
 MozcEngine* g_engine = nullptr;
 bool g_toolbar_positioned = false;
 bool g_use_layer_shell = false;  // true if we used gtk-layer-shell for positioning
@@ -95,12 +100,18 @@ static bool IsX11() {
   return n && n[0] == ':';
 }
 
-// marinaMoji-style: read toolbar_hide_on_focus_loss from ~/.config/ibus/marinamozc/toolbar.conf
-static bool LoadHideOnFocusLossPreference() {
+// Config path: ~/.config/ibus/marinamozc/toolbar.conf
+static gchar* GetToolbarConfigPath() {
   gchar* config_dir =
       g_build_filename(g_get_user_config_dir(), "ibus", "marinamozc", nullptr);
   gchar* path = g_build_filename(config_dir, "toolbar.conf", nullptr);
   g_free(config_dir);
+  return path;
+}
+
+// marinaMoji-style: read toolbar_hide_on_focus_loss from ~/.config/ibus/marinamozc/toolbar.conf
+static bool LoadHideOnFocusLossPreference() {
+  gchar* path = GetToolbarConfigPath();
   GKeyFile* keyfile = g_key_file_new();
   GError* error = nullptr;
   gboolean loaded = g_key_file_load_from_file(keyfile, path, G_KEY_FILE_NONE, &error);
@@ -174,9 +185,111 @@ static void SetButtonIcon(GtkButton* btn, const char* svg_name) {
 
 static bool IsButtonWidget(GtkWidget* widget) {
   if (!widget) return false;
-  return (widget == g_trad_toggle || widget == g_odoriji_btn ||
-          gtk_widget_is_ancestor(widget, g_trad_toggle) ||
-          gtk_widget_is_ancestor(widget, g_odoriji_btn));
+  return (widget == g_trad_btn || widget == g_odoriji_btn ||
+          widget == g_dict_cell ||
+          gtk_widget_is_ancestor(widget, g_trad_btn) ||
+          gtk_widget_is_ancestor(widget, g_odoriji_btn) ||
+          gtk_widget_is_ancestor(widget, g_dict_cell));
+}
+
+static bool IsModeIndicatorWidget(GtkWidget* widget) {
+  if (!widget || !g_mode_indicator_cell) return false;
+  return (widget == g_mode_indicator_cell ||
+          gtk_widget_is_ancestor(g_mode_indicator_cell, widget));
+}
+
+// Menu entries for the mode-indicator popup (same order as IME panel).
+struct ModeMenuEntry {
+  commands::CompositionMode mode;
+  const char* label;
+};
+static constexpr ModeMenuEntry kModeMenuEntries[] = {
+    {commands::DIRECT, "Direct input"},
+    {commands::HIRAGANA, "Hiragana"},
+    {commands::FULL_KATAKANA, "Katakana"},
+    {commands::HALF_ASCII, "Latin"},
+    {commands::FULL_ASCII, "Wide Latin"},
+    {commands::HALF_KATAKANA, "Half width katakana"},
+};
+
+static void OnModeMenuActivate(GtkMenuItem* item, gpointer /*user_data*/) {
+  if (!g_engine) return;
+  gpointer p = g_object_get_data(G_OBJECT(item), "composition-mode");
+  if (!p) return;
+  auto mode = static_cast<commands::CompositionMode>(GPOINTER_TO_INT(p));
+  g_engine->SetCompositionModeFromToolbar(mode);
+}
+
+// Deferred destroy so "activate" is delivered before the menu is destroyed (marinaMoji-style).
+static gboolean ModeMenuDestroyIdle(gpointer user_data) {
+  GtkWidget* menu = static_cast<GtkWidget*>(user_data);
+  if (menu && GTK_IS_WIDGET(menu)) gtk_widget_destroy(menu);
+  return G_SOURCE_REMOVE;
+}
+static void OnModeMenuDeactivate(GtkWidget* menu, gpointer /*user_data*/) {
+  if (menu) g_idle_add(ModeMenuDestroyIdle, menu);
+}
+
+// Key press on menu: Escape closes it so user can dismiss without selecting.
+static gboolean OnModeMenuKeyPress(GtkWidget* menu, GdkEventKey* event,
+                                  gpointer /*user_data*/) {
+  if (event->keyval == GDK_KEY_Escape) {
+    gtk_menu_popdown(GTK_MENU(menu));
+    return TRUE;
+  }
+  return FALSE;
+}
+
+// Build and show the input-schema menu. ESC / click outside / choice closes it (marinaMoji-style).
+static void ShowModeIndicatorMenu(GdkEventButton* event) {
+  if (!g_mode_indicator_cell || !g_engine) return;
+  GtkWidget* menu = gtk_menu_new();
+  for (const ModeMenuEntry& entry : kModeMenuEntries) {
+    GtkWidget* item = gtk_menu_item_new_with_label(entry.label);
+    g_object_set_data(G_OBJECT(item), "composition-mode",
+                      GINT_TO_POINTER(static_cast<int>(entry.mode)));
+    g_signal_connect(item, "activate", G_CALLBACK(OnModeMenuActivate), nullptr);
+    gtk_menu_shell_append(GTK_MENU_SHELL(menu), item);
+  }
+  gtk_widget_show_all(menu);
+  g_signal_connect(menu, "key-press-event", G_CALLBACK(OnModeMenuKeyPress), nullptr);
+  g_signal_connect(menu, "deactivate", G_CALLBACK(OnModeMenuDeactivate), nullptr);
+  GdkEvent* ev = event ? reinterpret_cast<GdkEvent*>(event) : nullptr;
+  gtk_menu_popup_at_pointer(GTK_MENU(menu), ev);
+}
+
+// MarinaMoji-style mode indicator: map composition mode to toolbar SVG (light theme).
+static const char* GetModeIndicatorIconName(commands::CompositionMode mode,
+                                             bool light) {
+  switch (mode) {
+    case commands::DIRECT:
+      return light ? "toolbar_roma_half_light.svg" : "toolbar_roma_half_dark.svg";
+    case commands::HIRAGANA:
+      return light ? "toolbar_hira_light.svg" : "toolbar_hira_dark.svg";
+    case commands::FULL_KATAKANA:
+      return light ? "toolbar_kata_light.svg" : "toolbar_kata_dark.svg";
+    case commands::HALF_ASCII:
+      return light ? "toolbar_roma_half_light.svg" : "toolbar_roma_half_dark.svg";
+    case commands::FULL_ASCII:
+      return light ? "toolbar_roma_full_light.svg" : "toolbar_roma_full_dark.svg";
+    case commands::HALF_KATAKANA:
+      return light ? "toolbar_kata_half_light.svg" : "toolbar_kata_half_dark.svg";
+    case commands::MANYOSHU:
+      // Show full katakana icon for Manyōshū (same as FULL_KATAKANA).
+      return light ? "toolbar_kata_light.svg" : "toolbar_kata_dark.svg";
+    default:
+      return light ? "toolbar_hira_light.svg" : "toolbar_hira_dark.svg";
+  }
+}
+
+static void UpdateModeIndicatorIcon(commands::CompositionMode mode) {
+  if (!g_mode_indicator_image) return;
+  const char* icon_name = GetModeIndicatorIconName(mode, true);
+  GdkPixbuf* pixbuf = LoadSvgIcon(icon_name, kIconSize, kIconSize);
+  if (pixbuf) {
+    gtk_image_set_from_pixbuf(GTK_IMAGE(g_mode_indicator_image), pixbuf);
+    g_object_unref(pixbuf);
+  }
 }
 
 // Create image from SVG for logo (wider than button icons).
@@ -394,16 +507,28 @@ static gboolean OnButtonPress(GtkWidget* widget, GdkEventButton* event,
     return FALSE;
   }
   GtkWidget* target = gtk_get_event_widget(reinterpret_cast<GdkEvent*>(event));
+  // Left-click on mode indicator: open input-schema menu (ESC / click outside / choice closes it).
+  if (target && IsModeIndicatorWidget(target)) {
+    ShowModeIndicatorMenu(event);
+    return TRUE;
+  }
+  // Let actual buttons (trad, odoriji, dict) handle their own click.
   if (target && IsButtonWidget(target)) return FALSE;
-
-  g_toolbar_user_moved = true;  // marinaMoji-style: restore position on next show
-  g_drag_active = true;
+  // marinaMoji-style: drag from anywhere else (logo, frame, box, spacers, gaps).
+  g_toolbar_user_moved = true;
+  if (IsWayland()) {
+    gtk_window_begin_move_drag(GTK_WINDOW(g_toolbar_window), event->button,
+                               static_cast<gint>(event->x_root),
+                               static_cast<gint>(event->y_root),
+                               event->time);
+    return TRUE;
+  }
+  // X11 fallback: pointer grab + motion-notify + gtk_window_move.
+  gtk_window_get_position(GTK_WINDOW(g_toolbar_window), &g_window_x, &g_window_y);
   g_drag_offset_x = static_cast<int>(event->x_root) - g_window_x;
   g_drag_offset_y = static_cast<int>(event->y_root) - g_window_y;
-  gtk_window_begin_move_drag(GTK_WINDOW(g_toolbar_window), event->button,
-                             static_cast<gint>(event->x_root),
-                             static_cast<gint>(event->y_root),
-                             event->time);
+  g_drag_active = true;
+  gtk_grab_add(g_toolbar_window);
   return TRUE;
 }
 
@@ -411,17 +536,24 @@ static gboolean OnButtonRelease(GtkWidget* /*widget*/, GdkEventButton* event,
                                  gpointer /*data*/) {
   if (event->button == 1 && g_drag_active) {
     g_drag_active = false;
+    gtk_grab_remove(g_toolbar_window);
+    g_drag_offset_x = 0;
+    g_drag_offset_y = 0;
     gtk_window_get_position(GTK_WINDOW(g_toolbar_window), &g_window_x, &g_window_y);
+    return TRUE;
   }
   return FALSE;
 }
 
 static gboolean OnMotion(GtkWidget* /*widget*/, GdkEventMotion* event,
                          gpointer /*data*/) {
-  if (g_drag_active) {
-    gtk_window_get_position(GTK_WINDOW(g_toolbar_window), &g_window_x, &g_window_y);
-  }
-  return FALSE;
+  if (!g_toolbar_window || !g_drag_active) return FALSE;
+  gint new_x = static_cast<gint>(event->x_root) - g_drag_offset_x;
+  gint new_y = static_cast<gint>(event->y_root) - g_drag_offset_y;
+  gtk_window_move(GTK_WINDOW(g_toolbar_window), new_x, new_y);
+  g_window_x = new_x;
+  g_window_y = new_y;
+  return TRUE;
 }
 
 static gboolean OnFocusIn(GtkWidget* /*widget*/, GdkEventFocus* /*event*/,
@@ -445,10 +577,12 @@ static void EnsureToolbarCSS() {
       "  border: 1px solid rgba(0, 0, 0, 0.08);"
       "  padding: 6px 10px;"
       "}"
-      "#marinamozc-trad-btn, #marinamozc-trad-btn:hover,"
-      "#marinamozc-trad-btn:checked, #marinamozc-trad-btn:active,"
+      "#marinamozc-mode-indicator,"
+      "#marinamozc-trad-btn, #marinamozc-trad-btn:hover, #marinamozc-trad-btn:active,"
       "#marinamozc-odoriji-btn, #marinamozc-odoriji-btn:hover,"
-      "#marinamozc-odoriji-btn:active {"
+      "#marinamozc-odoriji-btn:active,"
+      "#marinamozc-dict-btn, #marinamozc-dict-btn:hover,"
+      "#marinamozc-dict-btn:active {"
       "  background-color: transparent; border: none; box-shadow: none;"
       "  padding: 0; margin: 0; outline: none;"
       "}";
@@ -460,14 +594,11 @@ static void EnsureToolbarCSS() {
   g_object_unref(provider);
 }
 
-void OnTraditionalKanjiToggled(GtkToggleButton* btn, gpointer /*data*/) {
+// Shin/kyū: regular button (like odoriji); icon is updated from output, not toggle state.
+void OnTradClicked(GtkWidget* /*widget*/, gpointer /*data*/) {
   if (g_engine) {
-    g_signal_handlers_block_by_func(btn,
-        reinterpret_cast<gpointer>(OnTraditionalKanjiToggled), nullptr);
     g_engine->SendToolbarSessionCommand(
         commands::SessionCommand::TOGGLE_TRADITIONAL_KANJI);
-    g_signal_handlers_unblock_by_func(btn,
-        reinterpret_cast<gpointer>(OnTraditionalKanjiToggled), nullptr);
   }
 }
 
@@ -476,6 +607,21 @@ void OnOdorijiClicked(GtkWidget* /*widget*/, gpointer /*data*/) {
     g_engine->SendToolbarSessionCommand(
         commands::SessionCommand::SHOW_ODORIJI_PALETTE);
   }
+}
+
+// Left click = Add Word, right click = Dictionary tool.
+static gboolean OnDictButtonPress(GtkWidget* /*widget*/, GdkEventButton* event,
+                                  gpointer /*data*/) {
+  if (!g_engine || event->type != GDK_BUTTON_PRESS) return FALSE;
+  if (event->button == 1) {
+    g_engine->LaunchToolFromToolbar("word_register_dialog");
+    return TRUE;
+  }
+  if (event->button == 3) {
+    g_engine->LaunchToolFromToolbar("dictionary_tool");
+    return TRUE;
+  }
+  return FALSE;
 }
 
 void EnsureToolbarCreated() {
@@ -552,33 +698,56 @@ void EnsureToolbarCreated() {
                    G_CALLBACK(OnButtonPress), nullptr);
   gtk_container_add(GTK_CONTAINER(g_toolbar_frame), g_toolbar_box);
 
-  GtkWidget* lead = gtk_event_box_new();
-  gtk_widget_set_size_request(lead, 8, kToolbarHeight);
-  gtk_widget_add_events(lead, GDK_BUTTON_PRESS_MASK);
-  g_signal_connect(lead, "button-press-event", G_CALLBACK(OnButtonPress), nullptr);
-  gtk_box_pack_start(GTK_BOX(g_toolbar_box), lead, FALSE, FALSE, 0);
+  // Lead spacer and logo: draggable (no handler here so click propagates to box → OnButtonPress).
+  g_lead_cell = gtk_event_box_new();
+  gtk_widget_set_size_request(g_lead_cell, 8, kToolbarHeight);
+  gtk_widget_set_can_focus(g_lead_cell, FALSE);
+  gtk_widget_add_events(g_lead_cell, GDK_BUTTON_PRESS_MASK);
+  g_signal_connect(g_lead_cell, "button-press-event", G_CALLBACK(OnButtonPress), nullptr);
+  gtk_box_pack_start(GTK_BOX(g_toolbar_box), g_lead_cell, FALSE, FALSE, 0);
 
   GtkWidget* logo_img = CreateLogoImage();
   gtk_widget_set_halign(logo_img, GTK_ALIGN_CENTER);
   gtk_widget_set_valign(logo_img, GTK_ALIGN_CENTER);
   g_logo_cell = gtk_event_box_new();
+  gtk_event_box_set_visible_window(GTK_EVENT_BOX(g_logo_cell), TRUE);
   gtk_widget_set_size_request(g_logo_cell, kToolbarLogoWidth, 32);
   gtk_widget_set_can_focus(g_logo_cell, FALSE);
   gtk_widget_add_events(g_logo_cell, GDK_BUTTON_PRESS_MASK);
-  g_signal_connect(g_logo_cell, "button-press-event", G_CALLBACK(OnButtonPress), nullptr);
+  // No button-press on logo_cell: let event propagate to box so drag is handled in one place.
   gtk_container_add(GTK_CONTAINER(g_logo_cell), logo_img);
   gtk_box_pack_start(GTK_BOX(g_toolbar_box), g_logo_cell, FALSE, FALSE, 0);
 
-  g_trad_toggle = gtk_toggle_button_new();
-  gtk_button_set_relief(GTK_BUTTON(g_trad_toggle), GTK_RELIEF_NONE);
-  gtk_widget_set_focus_on_click(g_trad_toggle, FALSE);
-  gtk_widget_set_can_focus(g_trad_toggle, FALSE);
-  gtk_widget_set_size_request(g_trad_toggle, 32, 32);
-  gtk_widget_set_name(g_trad_toggle, "marinamozc-trad-btn");
-  gtk_button_set_label(GTK_BUTTON(g_trad_toggle), "");
-  SetButtonIcon(GTK_BUTTON(g_trad_toggle), "toolbar_shin_light.svg");
-  g_signal_connect(g_trad_toggle, "toggled", G_CALLBACK(OnTraditionalKanjiToggled), nullptr);
-  gtk_box_pack_start(GTK_BOX(g_toolbar_box), g_trad_toggle, FALSE, FALSE, 0);
+  // Mode indicator (marinaMoji-style: あ/ア/roma etc.) — same vertical alignment as other toolbar icons.
+  GdkPixbuf* mode_pixbuf =
+      LoadSvgIcon(GetModeIndicatorIconName(commands::HIRAGANA, true),
+                  kIconSize, kIconSize);
+  g_mode_indicator_image = gtk_image_new_from_pixbuf(mode_pixbuf);
+  if (mode_pixbuf) g_object_unref(mode_pixbuf);
+  gtk_widget_set_halign(g_mode_indicator_image, GTK_ALIGN_CENTER);
+  gtk_widget_set_valign(g_mode_indicator_image, GTK_ALIGN_CENTER);
+  g_mode_indicator_cell = gtk_event_box_new();
+  gtk_widget_set_name(g_mode_indicator_cell, "marinamozc-mode-indicator");
+  gtk_widget_set_size_request(g_mode_indicator_cell, 32, 32);
+  gtk_widget_set_halign(g_mode_indicator_cell, GTK_ALIGN_CENTER);
+  gtk_widget_set_valign(g_mode_indicator_cell, GTK_ALIGN_CENTER);
+  gtk_widget_set_can_focus(g_mode_indicator_cell, FALSE);
+  gtk_widget_add_events(g_mode_indicator_cell, GDK_BUTTON_PRESS_MASK);
+  g_signal_connect(g_mode_indicator_cell, "button-press-event",
+                   G_CALLBACK(OnButtonPress), nullptr);
+  gtk_container_add(GTK_CONTAINER(g_mode_indicator_cell), g_mode_indicator_image);
+  gtk_box_pack_start(GTK_BOX(g_toolbar_box), g_mode_indicator_cell, FALSE, FALSE, 0);
+
+  g_trad_btn = gtk_button_new();
+  gtk_button_set_relief(GTK_BUTTON(g_trad_btn), GTK_RELIEF_NONE);
+  gtk_widget_set_focus_on_click(g_trad_btn, FALSE);
+  gtk_widget_set_can_focus(g_trad_btn, FALSE);
+  gtk_widget_set_size_request(g_trad_btn, 32, 32);
+  gtk_widget_set_name(g_trad_btn, "marinamozc-trad-btn");
+  gtk_button_set_label(GTK_BUTTON(g_trad_btn), "");
+  SetButtonIcon(GTK_BUTTON(g_trad_btn), "toolbar_shin_light.svg");
+  g_signal_connect(g_trad_btn, "clicked", G_CALLBACK(OnTradClicked), nullptr);
+  gtk_box_pack_start(GTK_BOX(g_toolbar_box), g_trad_btn, FALSE, FALSE, 0);
 
   g_odoriji_btn = gtk_button_new();
   gtk_button_set_relief(GTK_BUTTON(g_odoriji_btn), GTK_RELIEF_NONE);
@@ -591,24 +760,44 @@ void EnsureToolbarCreated() {
   g_signal_connect(g_odoriji_btn, "clicked", G_CALLBACK(OnOdorijiClicked), nullptr);
   gtk_box_pack_start(GTK_BOX(g_toolbar_box), g_odoriji_btn, FALSE, FALSE, 0);
 
-  GtkWidget* trail = gtk_event_box_new();
-  gtk_widget_set_size_request(trail, 8, kToolbarHeight);
-  gtk_widget_add_events(trail, GDK_BUTTON_PRESS_MASK);
-  g_signal_connect(trail, "button-press-event", G_CALLBACK(OnButtonPress), nullptr);
-  gtk_box_pack_start(GTK_BOX(g_toolbar_box), trail, FALSE, FALSE, 0);
+  // Dict button: left click = Add Word, right click = Dictionary tool.
+  GdkPixbuf* dict_pixbuf = LoadSvgIcon("toolbar_dict_light.svg", kIconSize, kIconSize);
+  GtkWidget* dict_img = gtk_image_new_from_pixbuf(dict_pixbuf);
+  if (dict_pixbuf) g_object_unref(dict_pixbuf);
+  gtk_widget_set_halign(dict_img, GTK_ALIGN_CENTER);
+  gtk_widget_set_valign(dict_img, GTK_ALIGN_CENTER);
+  g_dict_cell = gtk_event_box_new();
+  gtk_widget_set_name(g_dict_cell, "marinamozc-dict-btn");
+  gtk_widget_set_size_request(g_dict_cell, 32, 32);
+  gtk_widget_set_halign(g_dict_cell, GTK_ALIGN_CENTER);
+  gtk_widget_set_valign(g_dict_cell, GTK_ALIGN_CENTER);
+  gtk_widget_set_can_focus(g_dict_cell, FALSE);
+  gtk_widget_add_events(g_dict_cell, GDK_BUTTON_PRESS_MASK);
+  g_signal_connect(g_dict_cell, "button-press-event",
+                   G_CALLBACK(OnDictButtonPress), nullptr);
+  gtk_container_add(GTK_CONTAINER(g_dict_cell), dict_img);
+  gtk_box_pack_start(GTK_BOX(g_toolbar_box), g_dict_cell, FALSE, FALSE, 0);
+
+  g_trail_cell = gtk_event_box_new();
+  gtk_widget_set_size_request(g_trail_cell, 8, kToolbarHeight);
+  gtk_widget_set_can_focus(g_trail_cell, FALSE);
+  gtk_widget_add_events(g_trail_cell, GDK_BUTTON_PRESS_MASK);
+  g_signal_connect(g_trail_cell, "button-press-event", G_CALLBACK(OnButtonPress), nullptr);
+  gtk_box_pack_start(GTK_BOX(g_toolbar_box), g_trail_cell, FALSE, FALSE, 0);
 }
 
 void ApplyOutputToToolbar(const commands::Output& output) {
-  if (!g_trad_toggle || !g_odoriji_btn) return;
+  if (!g_trad_btn || !g_odoriji_btn) return;
   if (output.has_config()) {
     bool use_trad = output.config().use_traditional_kanji();
-    g_signal_handlers_block_by_func(g_trad_toggle,
-        reinterpret_cast<gpointer>(OnTraditionalKanjiToggled), nullptr);
-    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(g_trad_toggle), use_trad ? TRUE : FALSE);
-    SetButtonIcon(GTK_BUTTON(g_trad_toggle),
+    SetButtonIcon(GTK_BUTTON(g_trad_btn),
                   use_trad ? "toolbar_kyu_light.svg" : "toolbar_shin_light.svg");
-    g_signal_handlers_unblock_by_func(g_trad_toggle,
-        reinterpret_cast<gpointer>(OnTraditionalKanjiToggled), nullptr);
+  }
+  if (output.has_status() && g_mode_indicator_image) {
+    commands::CompositionMode mode = output.status().activated()
+                                         ? output.status().mode()
+                                         : commands::DIRECT;
+    UpdateModeIndicatorIcon(mode);
   }
 }
 
@@ -643,6 +832,55 @@ void MozcToolbarUpdate(const commands::Output& output) {
 
 bool MozcToolbarAvailable() { return true; }
 
+// Load toolbar visibility. Default true (on) for first install; thereafter use saved value.
+bool MozcToolbarLoadVisiblePreference() {
+  gchar* config_dir =
+      g_build_filename(g_get_user_config_dir(), "ibus", "marinamozc", nullptr);
+  gchar* path = g_build_filename(config_dir, "toolbar.conf", nullptr);
+  g_free(config_dir);
+  GKeyFile* keyfile = g_key_file_new();
+  GError* error = nullptr;
+  gboolean loaded = g_key_file_load_from_file(keyfile, path, G_KEY_FILE_NONE, &error);
+  g_free(path);
+  if (!loaded) {
+    if (error) g_error_free(error);
+    g_key_file_free(keyfile);
+    return true;  // default: toolbar on for new install
+  }
+  error = nullptr;
+  gboolean visible =
+      g_key_file_get_boolean(keyfile, "ui", "toolbar_visible", &error);
+  g_key_file_free(keyfile);
+  if (error) {
+    g_error_free(error);
+    return true;  // key missing: first run, default on
+  }
+  return visible;
+}
+
+// Persist toolbar visibility so it stays off/on until user toggles again.
+void MozcToolbarSaveVisiblePreference(bool visible) {
+  gchar* config_dir =
+      g_build_filename(g_get_user_config_dir(), "ibus", "marinamozc", nullptr);
+  gchar* path = g_build_filename(config_dir, "toolbar.conf", nullptr);
+  g_free(config_dir);
+  GKeyFile* keyfile = g_key_file_new();
+  GError* error = nullptr;
+  g_key_file_load_from_file(keyfile, path, G_KEY_FILE_NONE, &error);
+  if (error) g_error_free(error);
+  g_key_file_set_boolean(keyfile, "ui", "toolbar_visible", visible ? TRUE : FALSE);
+  gchar* dir = g_path_get_dirname(path);
+  if (g_mkdir_with_parents(dir, 0755) == 0) {
+    error = nullptr;
+    if (!g_key_file_save_to_file(keyfile, path, &error) && error) {
+      g_error_free(error);
+    }
+  }
+  g_free(dir);
+  g_free(path);
+  g_key_file_free(keyfile);
+}
+
 #else
 
 void MozcToolbarShow(MozcEngine* /*engine*/) {}
@@ -651,6 +889,8 @@ bool MozcToolbarShouldHideOnFocusLoss() { return false; }
 void MozcToolbarScheduleHideDelayed(unsigned int /*delay_ms*/) {}
 void MozcToolbarUpdate(const commands::Output& /*output*/) {}
 bool MozcToolbarAvailable() { return false; }
+bool MozcToolbarLoadVisiblePreference() { return true; }
+void MozcToolbarSaveVisiblePreference(bool /*visible*/) {}
 
 #endif  // MOZC_HAVE_GTK_TOOLBAR
 
