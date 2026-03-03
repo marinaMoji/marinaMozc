@@ -48,6 +48,8 @@ Composition	Ctrl t	ConvertToHalfAlphanumeric
 Composition	Ctrl u	ConvertToHiragana
 Composition	Ctrl Up	MoveCursorToBeginning
 Composition	Ctrl x	MoveCursorToEnd
+Composition	Ctrl 0	LaunchWordRegisterDialog
+Composition	Ctrl Shift 0	LaunchWordRegisterDialog
 Composition	Ctrl z	Cancel
 Composition	Delete	Delete
 Composition	Down	MoveCursorToEnd
@@ -125,6 +127,8 @@ Conversion	Ctrl u	ConvertToHiragana
 Conversion	Ctrl Up	ConvertPrev
 Conversion	Ctrl x	ConvertNext
 Conversion	Ctrl z	Cancel
+Conversion	Ctrl 0	LaunchWordRegisterDialog
+Conversion	Ctrl Shift 0	LaunchWordRegisterDialog
 Conversion	Delete	Cancel
 Conversion	Down	ConvertNext
 Conversion	Ctrl Shift `	ToggleAlphanumericMode
@@ -224,6 +228,10 @@ Precomposition	ON	IMEOn
 Precomposition	Shift Muhenkan	ToggleAlphanumericMode
 Precomposition	Shift Space	InsertAlternateSpace
 Precomposition	Space	InsertSpace
+Precomposition	Ctrl 0	LaunchWordRegisterDialog
+Precomposition	Ctrl Shift 0	LaunchWordRegisterDialog
+Prediction	Ctrl 0	LaunchWordRegisterDialog
+Prediction	Ctrl Shift 0	LaunchWordRegisterDialog
 Prediction	Ctrl Delete	DeleteSelectedCandidate
 Suggestion	Ctrl Shift 4	ToggleBoundary
 Suggestion	Ctrl Shift $	ToggleBoundary

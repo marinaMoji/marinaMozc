@@ -847,7 +847,59 @@ bool Client::LaunchToolWithProtoBuf(const commands::Output &output) {
     return false;
   }
 
-  // TODO(nona): extends output message to support extra argument.
+  if (mode == "word_register_dialog") {
+    if (output.has_word_register_expression()) {
+#ifdef _WIN32
+      SetEnvironmentVariableA(kWordRegisterEnvironmentName,
+                             output.word_register_expression().c_str(), 1);
+#else
+      ::setenv(kWordRegisterEnvironmentName,
+               output.word_register_expression().c_str(), 1);
+#endif
+    } else {
+#ifdef _WIN32
+      SetEnvironmentVariableA(kWordRegisterEnvironmentName, nullptr, 1);
+#else
+      ::unsetenv(kWordRegisterEnvironmentName);
+#endif
+    }
+    if (output.word_register_reading_candidates_size() > 0) {
+#ifdef _WIN32
+      SetEnvironmentVariableA(
+          kWordRegisterEnvironmentReadingName,
+          output.word_register_reading_candidates(0).c_str(), 1);
+#else
+      ::setenv(kWordRegisterEnvironmentReadingName,
+               output.word_register_reading_candidates(0).c_str(), 1);
+#endif
+      std::string candidates;
+      for (int i = 0; i < output.word_register_reading_candidates_size();
+           ++i) {
+        if (i > 0) {
+          candidates += '\n';
+        }
+        candidates += output.word_register_reading_candidates(i);
+      }
+#ifdef _WIN32
+      SetEnvironmentVariableA(
+          kWordRegisterEnvironmentReadingCandidatesName, candidates.c_str(),
+          1);
+#else
+      ::setenv(kWordRegisterEnvironmentReadingCandidatesName,
+               candidates.c_str(), 1);
+#endif
+    } else {
+#ifdef _WIN32
+      SetEnvironmentVariableA(kWordRegisterEnvironmentReadingName, nullptr, 1);
+      SetEnvironmentVariableA(
+          kWordRegisterEnvironmentReadingCandidatesName, nullptr, 1);
+#else
+      ::unsetenv(kWordRegisterEnvironmentReadingName);
+      ::unsetenv(kWordRegisterEnvironmentReadingCandidatesName);
+#endif
+    }
+  }
+
   return LaunchTool(mode, "");
 }
 

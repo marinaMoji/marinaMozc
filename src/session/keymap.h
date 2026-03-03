@@ -154,6 +154,7 @@ struct CompositionState {
     TOGGLE_MANYOSHU_HIRAGANA,
     INSERT_MACRON_VOWEL,
     TOGGLE_BOUNDARY,  // toggle segment boundary at cursor (break key)
+    LAUNCH_WORD_REGISTER_DIALOG,  // Ctrl+0: add word (expression/reading prefill when available)
     // Switch input mode.
     COMPOSITION_MODE_HIRAGANA,
     COMPOSITION_MODE_FULL_KATAKANA,
@@ -220,6 +221,7 @@ struct ConversionState {
     COMPOSITION_MODE_HALF_ALPHANUMERIC,
     DELETE_SELECTED_CANDIDATE,
     REPORT_BUG,
+    LAUNCH_WORD_REGISTER_DIALOG,
   };
 };
 

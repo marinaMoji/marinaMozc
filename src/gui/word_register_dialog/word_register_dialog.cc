@@ -115,7 +115,10 @@ WordRegisterDialog::WordRegisterDialog()
                  Qt::WindowStaysOnTopHint);
   setWindowModality(Qt::NonModal);
 
-  ReadinglineEdit->setMaxLength(kMaxEditLength);
+  ReadinglineEdit->setEditable(true);
+  if (ReadinglineEdit->lineEdit()) {
+    ReadinglineEdit->lineEdit()->setMaxLength(kMaxEditLength);
+  }
   WordlineEdit->setMaxLength(kMaxEditLength);
 
   if (!SetDefaultEntryFromEnvironmentVariable()) {
@@ -173,7 +176,7 @@ WordRegisterDialog::WordRegisterDialog()
 
   connect(WordlineEdit, SIGNAL(textChanged(const QString&)), this,
           SLOT(LineEditChanged(const QString&)));
-  connect(ReadinglineEdit, SIGNAL(textChanged(const QString&)), this,
+  connect(ReadinglineEdit, SIGNAL(currentTextChanged(const QString&)), this,
           SLOT(LineEditChanged(const QString&)));
   connect(WordlineEdit, SIGNAL(editingFinished()), this,
           SLOT(CompleteReading()));
@@ -184,8 +187,10 @@ WordRegisterDialog::WordRegisterDialog()
 
   if (!WordlineEdit->text().isEmpty()) {
     ReadinglineEdit->setFocus(Qt::OtherFocusReason);
-    if (!ReadinglineEdit->text().isEmpty()) {
-      ReadinglineEdit->selectAll();
+    if (!ReadinglineEdit->currentText().isEmpty()) {
+      if (ReadinglineEdit->lineEdit()) {
+        ReadinglineEdit->lineEdit()->selectAll();
+      }
     }
   }
 
@@ -205,16 +210,19 @@ void WordRegisterDialog::LineEditChanged(const QString& str) {
 }
 
 void WordRegisterDialog::CompleteReading() {
-  if (ReadinglineEdit->text().isEmpty()) {
-    ReadinglineEdit->setText(GetReading(WordlineEdit->text()));
-    ReadinglineEdit->selectAll();
+  if (ReadinglineEdit->currentText().isEmpty()) {
+    ReadinglineEdit->setCurrentText(GetReading(WordlineEdit->text()));
+    if (ReadinglineEdit->lineEdit()) {
+      ReadinglineEdit->lineEdit()->selectAll();
+    }
   }
   UpdateUIStatus();
 }
 
 void WordRegisterDialog::UpdateUIStatus() {
   const bool enabled =
-      !ReadinglineEdit->text().isEmpty() && !WordlineEdit->text().isEmpty();
+      !ReadinglineEdit->currentText().isEmpty() &&
+      !WordlineEdit->text().isEmpty();
 
   QAbstractButton* button =
       WordRegisterDialogbuttonBox->button(QDialogButtonBox::Ok);
@@ -261,7 +269,7 @@ void WordRegisterDialog::Clicked(QAbstractButton* button) {
 }
 
 WordRegisterDialog::ErrorCode WordRegisterDialog::SaveEntry() {
-  const std::string key = ReadinglineEdit->text().toStdString();
+  const std::string key = ReadinglineEdit->currentText().toStdString();
   const std::string value = WordlineEdit->text().toStdString();
   UserDictionary::PosType pos = user_dictionary::ToPosType(
       PartOfSpeechcomboBox->currentText().toStdString());
@@ -399,7 +407,7 @@ void WordRegisterDialog::SetDefaultEntryFromClipboard() {
   CopyCurrentSelectionToClipboard();
   const QString value = TrimValue(QApplication::clipboard()->text());
   WordlineEdit->setText(value);
-  ReadinglineEdit->setText(GetReading(value));
+  ReadinglineEdit->setCurrentText(GetReading(value));
 }
 
 void WordRegisterDialog::CopyCurrentSelectionToClipboard() {
@@ -443,12 +451,32 @@ bool WordRegisterDialog::SetDefaultEntryFromEnvironmentVariable() {
   }
   WordlineEdit->setText(entry);
 
-  QString reading_string =
-      TrimValue(GetEnv(mozc::kWordRegisterEnvironmentReadingName));
-  if (reading_string.isEmpty()) {
-    reading_string = GetReading(entry);
+  // Do not use TrimValue here so newline-separated candidates are preserved.
+  const QString candidates_str =
+      GetEnv(mozc::kWordRegisterEnvironmentReadingCandidatesName).trimmed();
+  if (!candidates_str.isEmpty()) {
+    ReadinglineEdit->clear();
+    const QStringList parts = candidates_str.split('\n', Qt::SkipEmptyParts);
+    for (const QString& part : parts) {
+      const QString trimmed = part.trimmed();
+      if (!trimmed.isEmpty()) {
+        ReadinglineEdit->addItem(trimmed);
+      }
+    }
+    if (ReadinglineEdit->count() > 0) {
+      ReadinglineEdit->setCurrentIndex(0);
+    }
   }
-  ReadinglineEdit->setText(reading_string);
+  if (ReadinglineEdit->currentText().isEmpty()) {
+    QString reading_string =
+        TrimValue(GetEnv(mozc::kWordRegisterEnvironmentReadingName));
+    if (reading_string.isEmpty()) {
+      reading_string = GetReading(entry);
+    }
+    if (!reading_string.isEmpty()) {
+      ReadinglineEdit->setCurrentText(reading_string);
+    }
+  }
 
   return true;
 }

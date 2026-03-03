@@ -31,6 +31,7 @@
 
 #include "session/session.h"
 
+#include <algorithm>
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
@@ -974,6 +975,8 @@ bool Session::SendKeyCompositionState(commands::Command* command) {
       // Always use OutputComposition so preedit (with "|") comes directly from composer.
       OutputComposition(command);
       return true;
+    case keymap::CompositionState::LAUNCH_WORD_REGISTER_DIALOG:
+      return LaunchWordRegisterDialog(command);
     case keymap::CompositionState::COMPOSITION_MODE_HIRAGANA:
       return CompositionModeHiragana(command);
 
@@ -1153,6 +1156,9 @@ bool Session::SendKeyConversionState(commands::Command* command) {
 
     case keymap::ConversionState::DELETE_SELECTED_CANDIDATE:
       return DeleteCandidateFromHistory(command);
+
+    case keymap::ConversionState::LAUNCH_WORD_REGISTER_DIALOG:
+      return LaunchWordRegisterDialog(command);
 
     case keymap::ConversionState::NONE:
       return DoNothing(command);
@@ -1344,6 +1350,7 @@ bool Session::ResetContext(commands::Command* command) {
   ClearUndoContext();
 
   context_->mutable_converter()->Reset();
+  last_committed_expression_.clear();
 
   SetStateToPredompositionAndCancel(context_.get());
   Output(command);
@@ -1992,6 +1999,10 @@ bool Session::CommitInternal(commands::Command* command,
   Output(command);
   // Copy the previous output for Undo.
   *context_->mutable_output() = command->output();
+  // Store committed value for word register dialog prefill (Ctrl+0 in Precomposition).
+  if (command->output().has_result() && !command->output().result().value().empty()) {
+    last_committed_expression_ = command->output().result().value();
+  }
   return true;
 }
 
@@ -2480,8 +2491,37 @@ bool Session::LaunchDictionaryTool(commands::Command* command) {
 }
 
 bool Session::LaunchWordRegisterDialog(commands::Command* command) {
-  command->mutable_output()->set_launch_tool_mode(
-      commands::Output::WORD_REGISTER_DIALOG);
+  commands::Output* const output = command->mutable_output();
+  output->set_launch_tool_mode(commands::Output::WORD_REGISTER_DIALOG);
+
+  std::string expression;
+  if (context_->state() == ImeContext::CONVERSION &&
+      context_->converter().GetCurrentConversionResult(&expression) &&
+      !expression.empty()) {
+    output->set_word_register_expression(expression);
+    // Prefer the user's typed reading (preedit with boundary "|" stripped).
+    std::string preedit = context_->composer().GetStringForPreedit();
+    preedit.erase(std::remove(preedit.begin(), preedit.end(), '|'), preedit.end());
+    if (!preedit.empty()) {
+      output->add_word_register_reading_candidates(preedit);
+    }
+    // Add reverse-conversion result as an alternative (e.g. dictionary reading).
+    std::string reading;
+    if (context_->mutable_converter()->GetReadingText(expression, &reading) &&
+        !reading.empty()) {
+      output->add_word_register_reading_candidates(reading);
+    }
+  } else if (context_->state() == ImeContext::PRECOMPOSITION &&
+             !last_committed_expression_.empty()) {
+    output->set_word_register_expression(last_committed_expression_);
+    std::string reading;
+    if (context_->mutable_converter()->GetReadingText(last_committed_expression_,
+                                                     &reading) &&
+        !reading.empty()) {
+      output->add_word_register_reading_candidates(reading);
+    }
+  }
+
   return DoNothing(command);
 }
 

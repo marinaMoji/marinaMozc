@@ -645,6 +645,8 @@ void KeyMapManager::InitCommandData() {
                              CompositionState::INSERT_MACRON_VOWEL);
   RegisterCompositionCommand("ToggleBoundary",
                              CompositionState::TOGGLE_BOUNDARY);
+  RegisterCompositionCommand("LaunchWordRegisterDialog",
+                             CompositionState::LAUNCH_WORD_REGISTER_DIALOG);
   if (kCompositionModeXCommandSupported) {
     RegisterCompositionCommand(kCommandStringCompositionModeHiragana,
                                CompositionState::COMPOSITION_MODE_HIRAGANA);
@@ -784,6 +786,8 @@ void KeyMapManager::InitCommandData() {
 #ifndef NDEBUG  // means NOT RELEASE build
   RegisterConversionCommand("ReportBug", ConversionState::REPORT_BUG);
 #endif  // NDEBUG
+  RegisterConversionCommand("LaunchWordRegisterDialog",
+                            ConversionState::LAUNCH_WORD_REGISTER_DIALOG);
 }
 
 bool KeyMapManager::GetCommandDirect(

@@ -86,6 +86,10 @@ class EngineConverter : public EngineConverterInterface {
   bool GetReadingText(absl::string_view source_text,
                       std::string* reading) override;
 
+  // Appends current conversion result (all segments' selected values) when in
+  // CONVERSION state. Returns false otherwise.
+  bool GetCurrentConversionResult(std::string* result) const override;
+
   // Sends a transliteration request to the converter.
   bool ConvertToTransliteration(
       const composer::Composer& composer,

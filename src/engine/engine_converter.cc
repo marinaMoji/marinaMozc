@@ -203,6 +203,23 @@ bool EngineConverter::GetReadingText(absl::string_view source_text,
   return true;
 }
 
+bool EngineConverter::GetCurrentConversionResult(std::string* result) const {
+  DCHECK(result);
+  if (!CheckState(CONVERSION) || segments_.conversion_segments_size() == 0) {
+    return false;
+  }
+  result->clear();
+  for (size_t i = 0; i < segments_.conversion_segments_size(); ++i) {
+    const Segment& segment = segments_.conversion_segment(i);
+    const int idx = GetCandidateIndexForConverter(i);
+    if (!segment.is_valid_index(idx)) {
+      return false;
+    }
+    result->append(segment.candidate(idx).value);
+  }
+  return true;
+}
+
 namespace {
 Attributes GetT13nAttributes(const transliteration::TransliterationType type) {
   Attributes attributes = NO_ATTRIBUTES;

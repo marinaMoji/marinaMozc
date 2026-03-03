@@ -98,6 +98,11 @@ class EngineConverterInterface {
   // Get reading text (e.g. from "猫" to "ねこ").
   virtual bool GetReadingText(absl::string_view str, std::string* reading) = 0;
 
+  // When in CONVERSION state, appends the current conversion result (concatenation
+  // of all segments' selected candidate values) to |result| and returns true.
+  // Returns false when not in conversion or when there are no segments.
+  virtual bool GetCurrentConversionResult(std::string* result) const = 0;
+
   // Send a transliteration request to the converter.
   virtual bool ConvertToTransliteration(
       const composer::Composer& composer,

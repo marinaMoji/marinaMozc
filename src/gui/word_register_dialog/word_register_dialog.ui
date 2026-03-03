@@ -69,7 +69,11 @@
       <widget class="QLineEdit" name="WordlineEdit"/>
      </item>
      <item row="1" column="1" colspan="3">
-      <widget class="QLineEdit" name="ReadinglineEdit"/>
+      <widget class="QComboBox" name="ReadinglineEdit">
+       <property name="editable">
+        <bool>true</bool>
+       </property>
+      </widget>
      </item>
      <item row="2" column="1" colspan="2">
       <widget class="QComboBox" name="PartOfSpeechcomboBox"/>

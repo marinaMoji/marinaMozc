@@ -1429,6 +1429,11 @@ message Output {
     optional string data_version = 2;
   }
   optional VersionInfo server_version = 26;
+
+  // When launch_tool_mode == WORD_REGISTER_DIALOG: prefill expression and
+  // optional reading candidates so the user can pick instead of typing.
+  optional string word_register_expression = 27;
+  repeated string word_register_reading_candidates = 28;
 }
 
 message Command {

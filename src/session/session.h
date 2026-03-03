@@ -35,6 +35,7 @@
 #include <cstddef>
 #include <deque>
 #include <memory>
+#include <string>
 #include <utility>
 
 #include "absl/strings/string_view.h"
@@ -301,6 +302,10 @@ class Session {
   // When true, output mode is MANYOSHU (万葉集): composer stays HIRAGANA but
   // preedit is shown as katakana and candidates are deduplicated.
   bool manyoshu_mode_ = false;
+
+  // Last committed string (result value), used to prefill the word register
+  // dialog when Ctrl+0 is pressed in Precomposition (e.g. right after commit).
+  std::string last_committed_expression_;
 
   std::unique_ptr<ImeContext> CreateContext(
       const EngineInterface& engine) const;
