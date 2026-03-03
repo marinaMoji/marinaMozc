@@ -395,6 +395,24 @@ class KeyMapManager {
 template <typename T>
 bool KeyMap<T>::GetCommand(const commands::KeyEvent& key_event,
                            CommandsType* command) const {
+  // Right Shift alone (modifier-only with RIGHT_SHIFT): match before
+  // normalization so ToggleManyoshuHiragana always matches regardless of
+  // whether SHIFT is also present or how client sends the event.
+  if (!key_event.has_key_code() && !key_event.has_special_key()) {
+    const uint32_t mods = KeyEventUtil::GetModifiers(key_event);
+    if (mods & static_cast<uint32_t>(commands::KeyEvent::RIGHT_SHIFT)) {
+      commands::KeyEvent right_shift_only;
+      right_shift_only.add_modifier_keys(commands::KeyEvent::RIGHT_SHIFT);
+      KeyInformation right_shift_key;
+      if (KeyEventUtil::GetKeyInformation(right_shift_only, &right_shift_key)) {
+        if (const auto it = keymap_.find(right_shift_key); it != keymap_.end()) {
+          *command = it->second;
+          return true;
+        }
+      }
+    }
+  }
+
   // Shortcut keys should be available as if CapsLock was not enabled like
   // other IMEs such as MS-IME or ATOK. b/5627459
   commands::KeyEvent normalized_key_event;

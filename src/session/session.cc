@@ -555,6 +555,16 @@ bool IsBreakKey(const commands::KeyEvent& key) {
 // If we toggle on both, the second event removes the boundary; only the first
 // should toggle. Coalesce events within this window (ms).
 constexpr int kBreakKeyDebounceMs = 250;
+
+// Right Shift alone (modifier-only with RIGHT_SHIFT): toggle Hiragana/Manyoshu.
+// Detected here so it works regardless of keymap lookup or client encoding.
+bool IsRightShiftAlone(const commands::KeyEvent& key) {
+  if (key.has_key_code() || key.has_special_key()) {
+    return false;
+  }
+  return (KeyEventUtil::GetModifiers(key) &
+          static_cast<uint32_t>(commands::KeyEvent::RIGHT_SHIFT)) != 0;
+}
 }  // namespace
 
 bool Session::SendKey(commands::Command* command) {
@@ -624,6 +634,12 @@ bool Session::SendKey(commands::Command* command) {
     }
     // #endregion
     return true;
+  }
+
+  // Right Shift alone: toggle Hiragana / Katakana (Manyoshu). Handle at top
+  // level so it works in all states and regardless of keymap/client encoding.
+  if (IsRightShiftAlone(command->input().key())) {
+    return ToggleManyoshuHiragana(command);
   }
 
   bool result = false;
