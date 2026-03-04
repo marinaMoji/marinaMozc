@@ -10,6 +10,7 @@
 #include "unix/ibus/mozc_engine.h"
 #include "unix/ibus/path_util.h"
 #include "protocol/commands.pb.h"
+#include "protocol/config.pb.h"
 
 #ifdef MOZC_HAVE_GTK_TOOLBAR
 #include <gdk/gdk.h>
@@ -18,7 +19,12 @@
 #include <gtk/gtk.h>
 #include <cairo/cairo.h>
 #include <librsvg/rsvg.h>
+#include <map>
+#include <cstring>
+#include <fstream>
+#include <sstream>
 #include <string>
+#include <vector>
 #ifdef MOZC_HAVE_GTK_LAYER_SHELL
 #include <gtk-layer-shell.h>
 #endif
@@ -47,6 +53,7 @@ GtkWidget* g_mode_indicator_image = nullptr;
 GtkWidget* g_trad_btn = nullptr;
 GtkWidget* g_odoriji_btn = nullptr;
 GtkWidget* g_dict_cell = nullptr;
+GtkWidget* g_shortcuts_btn = nullptr;
 MozcEngine* g_engine = nullptr;
 bool g_toolbar_positioned = false;
 bool g_use_layer_shell = false;  // true if we used gtk-layer-shell for positioning
@@ -186,10 +193,11 @@ static void SetButtonIcon(GtkButton* btn, const char* svg_name) {
 static bool IsButtonWidget(GtkWidget* widget) {
   if (!widget) return false;
   return (widget == g_trad_btn || widget == g_odoriji_btn ||
-          widget == g_dict_cell ||
+          widget == g_dict_cell || widget == g_shortcuts_btn ||
           gtk_widget_is_ancestor(widget, g_trad_btn) ||
           gtk_widget_is_ancestor(widget, g_odoriji_btn) ||
-          gtk_widget_is_ancestor(widget, g_dict_cell));
+          gtk_widget_is_ancestor(widget, g_dict_cell) ||
+          gtk_widget_is_ancestor(widget, g_shortcuts_btn));
 }
 
 static bool IsModeIndicatorWidget(GtkWidget* widget) {
@@ -582,7 +590,9 @@ static void EnsureToolbarCSS() {
       "#marinamozc-odoriji-btn, #marinamozc-odoriji-btn:hover,"
       "#marinamozc-odoriji-btn:active,"
       "#marinamozc-dict-btn, #marinamozc-dict-btn:hover,"
-      "#marinamozc-dict-btn:active {"
+      "#marinamozc-dict-btn:active,"
+      "#marinamozc-shortcuts-btn, #marinamozc-shortcuts-btn:hover,"
+      "#marinamozc-shortcuts-btn:active {"
       "  background-color: transparent; border: none; box-shadow: none;"
       "  padding: 0; margin: 0; outline: none;"
       "}";
@@ -622,6 +632,436 @@ static gboolean OnDictButtonPress(GtkWidget* /*widget*/, GdkEventButton* event,
     return TRUE;
   }
   return FALSE;
+}
+
+// Shortcuts popup: multi-page dialog listing key combinations from the keymap
+// TSV selected in settings (ms-ime, atok, kotoeri, or custom).
+using ShortcutEntry = std::pair<std::string, std::string>;  // key, command
+// Grouped row: (function/result name, comma-separated keys)
+using GroupedShortcutRow = std::pair<std::string, std::string>;
+
+// Returns the keymap TSV filename for the given session keymap (for loading
+// via GetIconPath). Returns empty string for CUSTOM (content comes from config).
+static std::string KeymapFilenameFromSessionKeymap(
+    config::Config::SessionKeymap keymap) {
+  switch (keymap) {
+    case config::Config::ATOK:
+      return "atok.tsv";
+    case config::Config::MSIME:
+      return "ms-ime.tsv";
+    case config::Config::KOTOERI:
+      return "kotoeri.tsv";
+    case config::Config::MOBILE:
+      return "mobile.tsv";
+    case config::Config::CHROMEOS:
+      return "chromeos.tsv";
+    case config::Config::CUSTOM:
+      return "";
+    case config::Config::NONE:
+    default:
+      return "ms-ime.tsv";
+  }
+}
+
+static const char* const kScriptCommands[] = {
+    "ToggleAlphanumericMode", "ToggleHiraganaDirect", "ToggleTraditionalKanji",
+    "ToggleManyoshuHiragana", "ConvertToFullKatakana", "ConvertToHalfWidth",
+    "ConvertToFullAlphanumeric", "ConvertToHiragana", nullptr};
+static const char* const kCompositionCommands[] = {
+    "Commit", "LaunchWordRegisterDialog", "SegmentWidthShrink",
+    "SegmentWidthExpand", nullptr};
+
+static bool CommandInList(const char* cmd, const char* const* list) {
+  for (; *list; ++list)
+    if (strcmp(cmd, *list) == 0) return true;
+  return false;
+}
+
+static void ParseKeymapTsv(const std::string& path,
+                           std::vector<ShortcutEntry>* script,
+                           std::vector<ShortcutEntry>* composition) {
+  script->clear();
+  composition->clear();
+  std::ifstream f(path);
+  if (!f) return;
+  std::string line;
+  while (std::getline(f, line)) {
+    if (line.empty() || line[0] == '#') continue;
+    size_t t1 = line.find('\t');
+    if (t1 == std::string::npos) continue;
+    size_t t2 = line.find('\t', t1 + 1);
+    if (t2 == std::string::npos) continue;
+    std::string state = line.substr(0, t1);
+    std::string key = line.substr(t1 + 1, t2 - (t1 + 1));
+    std::string command = line.substr(t2 + 1);
+    while (!command.empty() && (command.back() == '\r' || command.back() == ' '))
+      command.pop_back();
+    if (state == "status" && key == "key") continue;  // skip header line
+    if (CommandInList(command.c_str(), kScriptCommands))
+      script->emplace_back(key, command);
+    if (CommandInList(command.c_str(), kCompositionCommands))
+      composition->emplace_back(key, command);
+  }
+}
+
+// Same as ParseKeymapTsv but from in-memory TSV content (e.g. custom keymap).
+static void ParseKeymapFromString(const std::string& content,
+                                  std::vector<ShortcutEntry>* script,
+                                  std::vector<ShortcutEntry>* composition) {
+  script->clear();
+  composition->clear();
+  std::istringstream stream(content);
+  std::string line;
+  while (std::getline(stream, line)) {
+    if (line.empty() || line[0] == '#') continue;
+    size_t t1 = line.find('\t');
+    if (t1 == std::string::npos) continue;
+    size_t t2 = line.find('\t', t1 + 1);
+    if (t2 == std::string::npos) continue;
+    std::string state = line.substr(0, t1);
+    std::string key = line.substr(t1 + 1, t2 - (t1 + 1));
+    std::string command = line.substr(t2 + 1);
+    while (!command.empty() && (command.back() == '\r' || command.back() == ' '))
+      command.pop_back();
+    if (state == "status" && key == "key") continue;
+    if (CommandInList(command.c_str(), kScriptCommands))
+      script->emplace_back(key, command);
+    if (CommandInList(command.c_str(), kCompositionCommands))
+      composition->emplace_back(key, command);
+  }
+}
+
+// Kaeriten (返り点) preedit table: input \t result \t [pending] \t [attrs]
+static void ParseKaeritenTsv(const std::string& path,
+                             std::vector<ShortcutEntry>* kaeriten) {
+  kaeriten->clear();
+  std::ifstream f(path);
+  if (!f) return;
+  std::string line;
+  while (std::getline(f, line)) {
+    if (line.empty() || line[0] == '#') continue;
+    size_t t1 = line.find('\t');
+    if (t1 == std::string::npos) continue;
+    size_t t2 = line.find('\t', t1 + 1);
+    std::string input = line.substr(0, t1);
+    std::string result = (t2 != std::string::npos)
+                             ? line.substr(t1 + 1, t2 - (t1 + 1))
+                             : line.substr(t1 + 1);
+    while (!result.empty() && (result.back() == '\r' || result.back() == ' '))
+      result.pop_back();
+    if (!input.empty()) kaeriten->emplace_back(input, result);
+  }
+}
+
+// Groups (key, command) entries by command/result; keys become comma-separated.
+// For script/comp, order follows the given command_order (only listed commands).
+// For kaeriten, order is first-occurrence of result (command_order is null).
+static void GroupShortcutsByCommand(
+    const std::vector<ShortcutEntry>& entries,
+    const char* const* command_order,
+    std::vector<GroupedShortcutRow>* out) {
+  out->clear();
+  std::map<std::string, std::vector<std::string>> by_cmd;
+  for (const auto& p : entries)
+    by_cmd[p.second].push_back(p.first);
+  if (command_order) {
+    for (; *command_order; ++command_order) {
+      auto it = by_cmd.find(*command_order);
+      if (it == by_cmd.end()) continue;
+      std::string keys;
+      for (size_t i = 0; i < it->second.size(); ++i) {
+        if (i) keys += ", ";
+        keys += it->second[i];
+      }
+      out->emplace_back(it->first, keys);
+    }
+  } else {
+    for (const auto& p : by_cmd) {
+      std::string keys;
+      for (size_t i = 0; i < p.second.size(); ++i) {
+        if (i) keys += ", ";
+        keys += p.second[i];
+      }
+      out->emplace_back(p.first, keys);
+    }
+  }
+}
+
+// Fallback when TSV files are not installed (e.g. only icons in install dir).
+static void FillDefaultScriptShortcuts(std::vector<ShortcutEntry>* script) {
+  if (!script->empty()) return;
+  const std::pair<const char*, const char*> kDefault[] = {
+      {"Ctrl Shift `", "ToggleAlphanumericMode"},
+      {"Eisu", "ToggleAlphanumericMode"},
+      {"Ctrl Shift 5", "ToggleHiraganaDirect"},
+      {"Ctrl Shift ²", "ToggleHiraganaDirect"},
+      {"Ctrl Shift F", "ToggleTraditionalKanji"},
+      {"RightShift", "ToggleManyoshuHiragana"},
+      {"Ctrl i", "ConvertToFullKatakana"},
+      {"F7", "ConvertToFullKatakana"},
+      {"Ctrl o", "ConvertToHalfWidth"},
+      {"F8", "ConvertToHalfWidth"},
+      {"Ctrl p", "ConvertToFullAlphanumeric"},
+      {"F9", "ConvertToFullAlphanumeric"},
+      {"Ctrl u", "ConvertToHiragana"},
+      {"F6", "ConvertToHiragana"},
+  };
+  for (const auto& p : kDefault) script->emplace_back(p.first, p.second);
+}
+
+static void FillDefaultCompositionShortcuts(std::vector<ShortcutEntry>* composition) {
+  if (!composition->empty()) return;
+  const std::pair<const char*, const char*> kDefault[] = {
+      {"Enter", "Commit"},
+      {"Ctrl Enter", "Commit"},
+      {"Ctrl m", "Commit"},
+      {"VirtualEnter", "Commit"},
+      {"Ctrl 0", "LaunchWordRegisterDialog"},
+      {"Ctrl Shift 0", "LaunchWordRegisterDialog"},
+      {"Ctrl k", "SegmentWidthShrink"},
+      {"Shift Left", "SegmentWidthShrink"},
+      {"VirtualLeft", "SegmentWidthShrink"},
+      {"Ctrl l", "SegmentWidthExpand"},
+      {"Shift Right", "SegmentWidthExpand"},
+      {"VirtualRight", "SegmentWidthExpand"},
+  };
+  for (const auto& p : kDefault) composition->emplace_back(p.first, p.second);
+}
+
+static void FillDefaultKaeritenShortcuts(std::vector<ShortcutEntry>* kaeriten) {
+  if (!kaeriten->empty()) return;
+  const std::pair<const char*, const char*> kDefault[] = {
+      {";te", "\xe3\x86\x9d"},   // ㆝
+      {";ti", "\xe3\x86\x9e"},   // ㆞
+      {";ji", "\xe3\x86\x9f"},   // ㆟
+      {";r", "\xe3\x86\x91"},    // ㆑
+      {";1", "\xe3\x86\x92"},    // ㆒
+      {";2", "\xe3\x86\x93"},    // ㆓
+      {";3", "\xe3\x86\x94"},    // ㆔
+      {";4", "\xe3\x86\x95"},    // ㆕
+      {";u", "\xe3\x86\x96"},    // ㆖
+      {";m", "\xe3\x86\x97"},    // ㆗
+      {";d", "\xe3\x86\x98"},    // ㆘
+      {";k", "\xe3\x86\x99"},    // ㆙
+      {";o", "\xe3\x86\x9a"},    // ㆚
+      {";h", "\xe3\x86\x9b"},    // ㆛
+      {";t", "\xe3\x86\x9c"},    // ㆜
+      {";.", "\xe3\x83\xbb"},    // ・
+      {";,", "\xe3\x80\x81"},    // 、
+  };
+  for (const auto& p : kDefault) kaeriten->emplace_back(p.first, p.second);
+}
+
+static GtkWidget* g_shortcuts_window = nullptr;
+static GtkWidget* g_shortcuts_stack = nullptr;
+static GtkLabel* g_shortcuts_title = nullptr;
+static GtkWidget* g_shortcuts_prev_btn = nullptr;
+static GtkWidget* g_shortcuts_next_btn = nullptr;
+static GtkLabel* g_shortcuts_prev_label = nullptr;
+static GtkLabel* g_shortcuts_next_label = nullptr;
+static GtkListBox* g_shortcuts_script_list = nullptr;
+static GtkListBox* g_shortcuts_comp_list = nullptr;
+static GtkListBox* g_shortcuts_kaeriten_list = nullptr;
+static const char* const kPageNames[] = {"Script", "Composition", "Kaeriten"};
+enum { kPageScript = 0, kPageComposition = 1, kPageKaeriten = 2, kPageCount = 3 };
+static int g_shortcuts_page = 0;
+
+struct ShortcutsData {
+  std::vector<GroupedShortcutRow> script;   // (function name, "key1, key2, ...")
+  std::vector<GroupedShortcutRow> composition;
+  std::vector<GroupedShortcutRow> kaeriten; // (result char, "input1, input2, ...")
+};
+
+static const char* ShortcutsStackPageName(int page) {
+  if (page == kPageScript) return "script";
+  if (page == kPageComposition) return "composition";
+  return "kaeriten";
+}
+
+static void ShortcutsPopupRefreshPage(int page, ShortcutsData* data) {
+  GtkListBox* list = nullptr;
+  const std::vector<GroupedShortcutRow>* rows = nullptr;
+  if (page == kPageScript) {
+    list = g_shortcuts_script_list;
+    rows = &data->script;
+  } else if (page == kPageComposition) {
+    list = g_shortcuts_comp_list;
+    rows = &data->composition;
+  } else {
+    list = g_shortcuts_kaeriten_list;
+    rows = &data->kaeriten;
+  }
+  if (!list) return;
+  GList* children = gtk_container_get_children(GTK_CONTAINER(list));
+  for (GList* it = children; it; it = it->next)
+    gtk_widget_destroy(GTK_WIDGET(it->data));
+  g_list_free(children);
+  for (const auto& row_pair : *rows) {
+    const std::string& name = row_pair.first;   // function name or result char
+    const std::string& keys = row_pair.second;   // "key1, key2, ..."
+    GtkWidget* row = gtk_list_box_row_new();
+    GtkWidget* box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 12);
+    gtk_container_set_border_width(GTK_CONTAINER(box), 4);
+    GtkWidget* name_l = gtk_label_new(name.c_str());
+    gtk_label_set_selectable(GTK_LABEL(name_l), TRUE);
+    gtk_label_set_xalign(GTK_LABEL(name_l), 0.0f);
+    gtk_widget_set_halign(name_l, GTK_ALIGN_START);
+    GtkWidget* keys_l = gtk_label_new(keys.c_str());
+    gtk_label_set_selectable(GTK_LABEL(keys_l), TRUE);
+    gtk_label_set_xalign(GTK_LABEL(keys_l), 0.0f);
+    gtk_widget_set_halign(keys_l, GTK_ALIGN_START);
+    gtk_box_pack_start(GTK_BOX(box), name_l, FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(box), keys_l, TRUE, TRUE, 0);
+    gtk_container_add(GTK_CONTAINER(row), box);
+    gtk_container_add(GTK_CONTAINER(list), row);
+  }
+  gtk_widget_show_all(GTK_WIDGET(list));
+}
+
+static void ShortcutsPopupUpdateHeader() {
+  char* bold = g_strdup_printf("<b>%s</b>", kPageNames[g_shortcuts_page]);
+  gtk_label_set_markup(g_shortcuts_title, bold);
+  g_free(bold);
+  int prev_i = (g_shortcuts_page + kPageCount - 1) % kPageCount;
+  int next_i = (g_shortcuts_page + 1) % kPageCount;
+  gtk_label_set_text(g_shortcuts_prev_label, kPageNames[prev_i]);
+  gtk_label_set_text(g_shortcuts_next_label, kPageNames[next_i]);
+  gtk_widget_set_sensitive(g_shortcuts_prev_btn, TRUE);
+  gtk_widget_set_sensitive(g_shortcuts_next_btn, TRUE);
+}
+
+static void OnShortcutsPrev(GtkButton* /*btn*/, gpointer data) {
+  g_shortcuts_page = (g_shortcuts_page + kPageCount - 1) % kPageCount;
+  gtk_stack_set_visible_child_name(GTK_STACK(g_shortcuts_stack),
+                                  ShortcutsStackPageName(g_shortcuts_page));
+  ShortcutsPopupUpdateHeader();
+  ShortcutsPopupRefreshPage(g_shortcuts_page, static_cast<ShortcutsData*>(data));
+}
+
+static void OnShortcutsNext(GtkButton* /*btn*/, gpointer data) {
+  g_shortcuts_page = (g_shortcuts_page + 1) % kPageCount;
+  gtk_stack_set_visible_child_name(GTK_STACK(g_shortcuts_stack),
+                                  ShortcutsStackPageName(g_shortcuts_page));
+  ShortcutsPopupUpdateHeader();
+  ShortcutsPopupRefreshPage(g_shortcuts_page, static_cast<ShortcutsData*>(data));
+}
+
+static void OnShortcutsPopupDestroy(GtkWidget* /*w*/, gpointer data) {
+  g_shortcuts_window = nullptr;
+  g_shortcuts_stack = nullptr;
+  g_shortcuts_title = nullptr;
+  g_shortcuts_prev_btn = nullptr;
+  g_shortcuts_next_btn = nullptr;
+  g_shortcuts_prev_label = nullptr;
+  g_shortcuts_next_label = nullptr;
+  g_shortcuts_script_list = nullptr;
+  g_shortcuts_comp_list = nullptr;
+  g_shortcuts_kaeriten_list = nullptr;
+  delete static_cast<ShortcutsData*>(data);
+}
+
+static void ShowShortcutsPopup() {
+  ShortcutsData* data = new ShortcutsData();
+  std::vector<ShortcutEntry> script_entries, comp_entries, kaeriten_entries;
+
+  // Load keymap from the TSV selected in settings (or fallback to ms-ime).
+  if (g_engine) {
+    config::Config config;
+    if (g_engine->GetConfig(&config)) {
+      config::Config::SessionKeymap keymap = config.session_keymap();
+      if (keymap == config::Config::CUSTOM && config.has_custom_keymap_table() &&
+          !config.custom_keymap_table().empty()) {
+        ParseKeymapFromString(config.custom_keymap_table(), &script_entries,
+                             &comp_entries);
+      } else {
+        std::string filename = KeymapFilenameFromSessionKeymap(keymap);
+        if (!filename.empty())
+          ParseKeymapTsv(GetIconPath(filename), &script_entries, &comp_entries);
+      }
+    }
+  }
+  if (script_entries.empty() && comp_entries.empty())
+    ParseKeymapTsv(GetIconPath("ms-ime.tsv"), &script_entries, &comp_entries);
+  FillDefaultScriptShortcuts(&script_entries);
+  FillDefaultCompositionShortcuts(&comp_entries);
+
+  ParseKaeritenTsv(GetIconPath("kaeriten.tsv"), &kaeriten_entries);
+  FillDefaultKaeritenShortcuts(&kaeriten_entries);
+
+  GroupShortcutsByCommand(script_entries, kScriptCommands, &data->script);
+  GroupShortcutsByCommand(comp_entries, kCompositionCommands, &data->composition);
+  GroupShortcutsByCommand(kaeriten_entries, nullptr, &data->kaeriten);
+
+  if (g_shortcuts_window) {
+    gtk_widget_destroy(g_shortcuts_window);
+    g_shortcuts_window = nullptr;
+  }
+  g_shortcuts_window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
+  gtk_window_set_title(GTK_WINDOW(g_shortcuts_window), "Keyboard shortcuts");
+  gtk_window_set_resizable(GTK_WINDOW(g_shortcuts_window), TRUE);
+  gtk_window_set_default_size(GTK_WINDOW(g_shortcuts_window), 420, 380);
+  gtk_window_set_position(GTK_WINDOW(g_shortcuts_window), GTK_WIN_POS_CENTER);
+  GtkWidget* content = gtk_box_new(GTK_ORIENTATION_VERTICAL, 8);
+  gtk_container_set_border_width(GTK_CONTAINER(content), 12);
+  gtk_container_add(GTK_CONTAINER(g_shortcuts_window), content);
+  GtkWidget* header = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
+  g_shortcuts_prev_btn = gtk_button_new();
+  GtkWidget* prev_box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 4);
+  gtk_container_add(GTK_CONTAINER(g_shortcuts_prev_btn), prev_box);
+  gtk_box_pack_start(GTK_BOX(prev_box), gtk_label_new("←"), FALSE, FALSE, 0);
+  g_shortcuts_prev_label = GTK_LABEL(gtk_label_new(""));
+  gtk_box_pack_start(GTK_BOX(prev_box), GTK_WIDGET(g_shortcuts_prev_label), FALSE, FALSE, 0);
+  g_shortcuts_next_btn = gtk_button_new();
+  GtkWidget* next_box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 4);
+  gtk_container_add(GTK_CONTAINER(g_shortcuts_next_btn), next_box);
+  g_shortcuts_next_label = GTK_LABEL(gtk_label_new(""));
+  gtk_box_pack_start(GTK_BOX(next_box), GTK_WIDGET(g_shortcuts_next_label), FALSE, FALSE, 0);
+  gtk_box_pack_start(GTK_BOX(next_box), gtk_label_new("→"), FALSE, FALSE, 0);
+  g_shortcuts_title = GTK_LABEL(gtk_label_new(""));
+  gtk_box_pack_start(GTK_BOX(header), g_shortcuts_prev_btn, FALSE, FALSE, 0);
+  gtk_box_pack_start(GTK_BOX(header), GTK_WIDGET(g_shortcuts_title), TRUE, TRUE, 0);
+  gtk_box_pack_end(GTK_BOX(header), g_shortcuts_next_btn, FALSE, FALSE, 0);
+  gtk_box_pack_start(GTK_BOX(content), header, FALSE, FALSE, 0);
+  g_shortcuts_stack = gtk_stack_new();
+  GtkWidget* script_frame = gtk_frame_new(nullptr);
+  GtkWidget* script_sw = gtk_scrolled_window_new(nullptr, nullptr);
+  gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(script_sw), GTK_POLICY_NEVER, GTK_POLICY_AUTOMATIC);
+  gtk_scrolled_window_set_min_content_height(GTK_SCROLLED_WINDOW(script_sw), 260);
+  g_shortcuts_script_list = GTK_LIST_BOX(gtk_list_box_new());
+  gtk_container_add(GTK_CONTAINER(script_sw), GTK_WIDGET(g_shortcuts_script_list));
+  gtk_container_add(GTK_CONTAINER(script_frame), script_sw);
+  gtk_stack_add_titled(GTK_STACK(g_shortcuts_stack), script_frame, "script", "Script");
+  GtkWidget* comp_frame = gtk_frame_new(nullptr);
+  GtkWidget* comp_sw = gtk_scrolled_window_new(nullptr, nullptr);
+  gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(comp_sw), GTK_POLICY_NEVER, GTK_POLICY_AUTOMATIC);
+  gtk_scrolled_window_set_min_content_height(GTK_SCROLLED_WINDOW(comp_sw), 260);
+  g_shortcuts_comp_list = GTK_LIST_BOX(gtk_list_box_new());
+  gtk_container_add(GTK_CONTAINER(comp_sw), GTK_WIDGET(g_shortcuts_comp_list));
+  gtk_container_add(GTK_CONTAINER(comp_frame), comp_sw);
+  gtk_stack_add_titled(GTK_STACK(g_shortcuts_stack), comp_frame, "composition", "Composition");
+  GtkWidget* kaeriten_frame = gtk_frame_new(nullptr);
+  GtkWidget* kaeriten_sw = gtk_scrolled_window_new(nullptr, nullptr);
+  gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(kaeriten_sw), GTK_POLICY_NEVER, GTK_POLICY_AUTOMATIC);
+  gtk_scrolled_window_set_min_content_height(GTK_SCROLLED_WINDOW(kaeriten_sw), 260);
+  g_shortcuts_kaeriten_list = GTK_LIST_BOX(gtk_list_box_new());
+  gtk_container_add(GTK_CONTAINER(kaeriten_sw), GTK_WIDGET(g_shortcuts_kaeriten_list));
+  gtk_container_add(GTK_CONTAINER(kaeriten_frame), kaeriten_sw);
+  gtk_stack_add_titled(GTK_STACK(g_shortcuts_stack), kaeriten_frame, "kaeriten", "Kaeriten");
+  gtk_box_pack_start(GTK_BOX(content), g_shortcuts_stack, TRUE, TRUE, 0);
+  g_shortcuts_page = 0;
+  gtk_stack_set_visible_child_name(GTK_STACK(g_shortcuts_stack), "script");
+  ShortcutsPopupUpdateHeader();
+  g_signal_connect(g_shortcuts_prev_btn, "clicked", G_CALLBACK(OnShortcutsPrev), data);
+  g_signal_connect(g_shortcuts_next_btn, "clicked", G_CALLBACK(OnShortcutsNext), data);
+  g_signal_connect(g_shortcuts_window, "destroy", G_CALLBACK(OnShortcutsPopupDestroy), data);
+  ShortcutsPopupRefreshPage(kPageScript, data);
+  ShortcutsPopupRefreshPage(kPageComposition, data);
+  ShortcutsPopupRefreshPage(kPageKaeriten, data);
+  gtk_widget_show_all(g_shortcuts_window);
+}
+
+void OnShortcutsClicked(GtkWidget* /*widget*/, gpointer /*data*/) {
+  ShowShortcutsPopup();
 }
 
 void EnsureToolbarCreated() {
@@ -777,6 +1217,17 @@ void EnsureToolbarCreated() {
                    G_CALLBACK(OnDictButtonPress), nullptr);
   gtk_container_add(GTK_CONTAINER(g_dict_cell), dict_img);
   gtk_box_pack_start(GTK_BOX(g_toolbar_box), g_dict_cell, FALSE, FALSE, 0);
+
+  g_shortcuts_btn = gtk_button_new();
+  gtk_button_set_relief(GTK_BUTTON(g_shortcuts_btn), GTK_RELIEF_NONE);
+  gtk_widget_set_focus_on_click(g_shortcuts_btn, FALSE);
+  gtk_widget_set_can_focus(g_shortcuts_btn, FALSE);
+  gtk_widget_set_size_request(g_shortcuts_btn, 32, 32);
+  gtk_widget_set_name(g_shortcuts_btn, "marinamozc-shortcuts-btn");
+  gtk_button_set_label(GTK_BUTTON(g_shortcuts_btn), "");
+  SetButtonIcon(GTK_BUTTON(g_shortcuts_btn), "toolbar_shortcuts_light.svg");
+  g_signal_connect(g_shortcuts_btn, "clicked", G_CALLBACK(OnShortcutsClicked), nullptr);
+  gtk_box_pack_start(GTK_BOX(g_toolbar_box), g_shortcuts_btn, FALSE, FALSE, 0);
 
   g_trail_cell = gtk_event_box_new();
   gtk_widget_set_size_request(g_trail_cell, 8, kToolbarHeight);

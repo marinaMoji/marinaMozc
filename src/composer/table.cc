@@ -65,6 +65,8 @@ constexpr char kDefaultPreeditTableFile[] = "system://romanji-hiragana.tsv";
 constexpr char kRomajiPreeditTableFile[] = "system://romanji-hiragana.tsv";
 // Table for Kana combinations like "か゛" → "が".
 constexpr char kKanaCombinationTableFile[] = "system://kana.tsv";
+// Kaeriten (返り点) and punctuation (;r → ㆑, ;. → ・, etc.).
+constexpr char kKaeritenTableFile[] = "system://kaeriten.tsv";
 
 // Special tables for 12keys
 constexpr char k12keysHiraganaTableFile[] = "system://12keys-hiragana.tsv";
@@ -311,6 +313,9 @@ bool Table::InitializeWithRequestAndConfig(const commands::Request& request,
 
   // Load Kana combination rules.
   result = LoadFromFile(kKanaCombinationTableFile);
+  if (!result) return result;
+  // Load kaeriten (返り点) and punctuation shortcuts.
+  result = LoadFromFile(kKaeritenTableFile);
   return result;
 }
 

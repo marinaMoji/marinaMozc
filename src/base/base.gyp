@@ -355,6 +355,7 @@
             '<(mozc_oss_src_dir)/data/preedit/flick-number.tsv',
             '<(mozc_oss_src_dir)/data/preedit/hiragana-romanji.tsv',
             '<(mozc_oss_src_dir)/data/preedit/kana.tsv',
+            '<(mozc_oss_src_dir)/data/preedit/kaeriten.tsv',
             '<(mozc_oss_src_dir)/data/preedit/notouch-hiragana.tsv',
             '<(mozc_oss_src_dir)/data/preedit/godan-hiragana.tsv',
             '<(mozc_oss_src_dir)/data/preedit/qwerty_mobile-halfwidthascii.tsv',

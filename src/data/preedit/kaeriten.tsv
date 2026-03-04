@@ -1,0 +1,19 @@
+# Kaeriten (返り点) and punctuation shortcuts. Longer sequences first.
+# Format: input \t result \t pending \t DirectInput
+;te	㆝		DirectInput
+;ti	㆞		DirectInput
+;ji	㆟		DirectInput
+;r	㆑		DirectInput
+;1	㆒		DirectInput
+;2	㆓		DirectInput
+;3	㆔		DirectInput
+;4	㆕		DirectInput
+;u	㆖		DirectInput
+;m	㆗		DirectInput
+;d	㆘		DirectInput
+;k	㆙		DirectInput
+;o	㆚		DirectInput
+;h	㆛		DirectInput
+;t	㆜		DirectInput
+;.	・		DirectInput
+;,	、		DirectInput

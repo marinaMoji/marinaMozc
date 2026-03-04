@@ -109,6 +109,11 @@ class MozcEngine : public EngineInterface {
   // "word_register_dialog", "dictionary_tool"). Returns true if launched.
   bool LaunchToolFromToolbar(const char* mode);
 
+  // Called by the toolbar shortcuts popup. Fills |config| with current config
+  // from the server (including session_keymap and custom_keymap_table).
+  // Returns false if the client is unavailable or GetConfig fails.
+  bool GetConfig(config::Config* config);
+
  private:
   // Updates the preedit text and the candidate window and inserts result
   // based on the content of |output|.

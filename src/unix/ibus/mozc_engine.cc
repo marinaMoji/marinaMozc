@@ -635,6 +635,11 @@ void MozcEngine::UpdatePreeditMethod() {
                                                 : config::Config::ROMAN;
 }
 
+bool MozcEngine::GetConfig(config::Config* config) {
+  if (client_ == nullptr || config == nullptr) return false;
+  return client_->GetConfig(config);
+}
+
 void MozcEngine::SyncData(bool force) {
   if (client_ == nullptr) {
     return;
