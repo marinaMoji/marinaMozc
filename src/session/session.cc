@@ -2400,9 +2400,14 @@ bool Session::CompositionModeManyoshu(commands::Command* command) {
 
 bool Session::ToggleManyoshuHiragana(commands::Command* command) {
   if (manyoshu_mode_) {
-    return CompositionModeHiragana(command);
+    CompositionModeHiragana(command);
+  } else {
+    CompositionModeManyoshu(command);
   }
-  return CompositionModeManyoshu(command);
+  // Do not consume Right Shift release so the app receives the key-up and
+  // modifier state (Shift) is cleared (avoids stuck capitals/selection).
+  command->mutable_output()->set_consumed(false);
+  return true;
 }
 
 bool Session::CompositionModeSwitchKanaType(commands::Command* command) {

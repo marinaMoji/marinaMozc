@@ -438,6 +438,14 @@ bool MozcEngine::ProcessKeyEvent(IbusEngineWrapper *engine, uint keyval,
 
   UpdateAll(engine, output);
 
+  // Do not consume Right Shift release so IBus forwards the key-up to the app;
+  // otherwise the app never sees the release and Shift stays stuck (capitals,
+  // arrow keys extend selection). Failsafe if session ever marks this consumed.
+  if (output.consumed() && !key.has_key_code() && !key.has_special_key() &&
+      key.modifier_keys_size() == 1 &&
+      key.modifier_keys(0) == commands::KeyEvent::RIGHT_SHIFT) {
+    return false;
+  }
   return output.consumed();
 }
 
