@@ -302,13 +302,6 @@ class ConversionRequest {
 
   absl::string_view key() const ABSL_ATTRIBUTE_LIFETIME_BOUND { return key_; }
 
-  // Character indices where a segment boundary is forced (no node may cross).
-  // Used for "break key" as boundary instruction. Empty when not set.
-  absl::Span<const size_t> segment_boundaries() const
-      ABSL_ATTRIBUTE_LIFETIME_BOUND {
-    return segment_boundaries_;
-  }
-
   // Takes the last `size` history key. return all value when size = -1.
   absl::string_view converter_history_key(int size = -1) const {
     return history_result_->inner_segments().GetSuffixKeyAndValue(size).first;
@@ -355,9 +348,6 @@ class ConversionRequest {
   // Key used for conversion.
   // This is typically a Hiragana text to be converted to Kanji words.
   std::string key_;
-
-  // Character indices where the user set a boundary (no segment may cross).
-  std::vector<size_t> segment_boundaries_;
 };
 
 class ConversionRequestBuilder {
@@ -371,12 +361,6 @@ class ConversionRequestBuilder {
       request_.key_ =
           GetKey(*request_.composer_data_, request_.options_.request_type,
                  request_.options_.composer_key_selection);
-      // Copy segment boundaries from composer when key came from composer.
-      if (request_.composer_data_) {
-        absl::Span<const size_t> bounds =
-            request_.composer_data_->GetSegmentBoundaries();
-        request_.segment_boundaries_.assign(bounds.begin(), bounds.end());
-      }
     }
     return request_;
   }
@@ -395,7 +379,6 @@ class ConversionRequestBuilder {
     request_.history_result_ = base_convreq.history_result_;
     request_.options_ = base_convreq.options_;
     request_.key_ = base_convreq.key_;
-    request_.segment_boundaries_ = base_convreq.segment_boundaries_;
     return *this;
   }
   ConversionRequestBuilder& SetConversionRequestView(
@@ -409,7 +392,6 @@ class ConversionRequestBuilder {
     request_.config_.set_view(*base_convreq.config_);
     request_.options_ = base_convreq.options_;
     request_.key_ = base_convreq.key_;
-    request_.segment_boundaries_ = base_convreq.segment_boundaries_;
     request_.history_result_.set_view(*base_convreq.history_result_);
     return *this;
   }
@@ -501,14 +483,6 @@ class ConversionRequestBuilder {
     DCHECK_LE(stage_, 3);
     stage_ = 3;
     strings::Assign(request_.key_, key);
-    return *this;
-  }
-
-  ConversionRequestBuilder& SetSegmentBoundaries(
-      std::vector<size_t> boundaries) {
-    DCHECK_LE(stage_, 3);
-    stage_ = 3;
-    request_.segment_boundaries_ = std::move(boundaries);
     return *this;
   }
 

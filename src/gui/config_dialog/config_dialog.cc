@@ -134,11 +134,6 @@ ConfigDialog::ConfigDialog()
 #endif  // NDEBUG
 
   // Sub-segment candidate limit: 0 = no limit, else max candidates per prefix.
-  subSegmentCandidateLimitComboBox->addItem(tr("No limit"), 0);
-  subSegmentCandidateLimitComboBox->addItem(QStringLiteral("20"), 20);
-  subSegmentCandidateLimitComboBox->addItem(QStringLiteral("50"), 50);
-  subSegmentCandidateLimitComboBox->addItem(QStringLiteral("100"), 100);
-
   suggestionsSizeSpinBox->setRange(1, 9);
 
   punctuationsSettingComboBox->addItem(QString::fromUtf8("、。"));
@@ -631,11 +626,6 @@ void ConfigDialog::ConvertFromProto(const config::Config &config) {
   SET_COMBOBOX(verboseLevelComboBox, int, verbose_level);
   SET_CHECKBOX(checkDefaultCheckBox, check_default);
   SET_COMBOBOX(yenSignComboBox, YenSignCharacter, yen_sign_character);
-  {
-    const int limit = config.sub_segment_candidate_limit();
-    const int idx = subSegmentCandidateLimitComboBox->findData(limit);
-    subSegmentCandidateLimitComboBox->setCurrentIndex(idx >= 0 ? idx : 1);
-  }
 
   characterFormEditor->Load(config);
 
@@ -729,8 +719,6 @@ void ConfigDialog::ConvertToProto(config::Config *config) const {
   config->set_verbose_level(verboseLevelComboBox->currentIndex());
   GET_CHECKBOX(checkDefaultCheckBox, check_default);
   GET_COMBOBOX(yenSignComboBox, YenSignCharacter, yen_sign_character);
-  config->set_sub_segment_candidate_limit(
-      subSegmentCandidateLimitComboBox->currentData().toInt());
 
   characterFormEditor->Save(config);
 }

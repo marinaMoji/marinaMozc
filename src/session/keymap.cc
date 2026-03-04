@@ -643,8 +643,6 @@ void KeyMapManager::InitCommandData() {
                              CompositionState::TOGGLE_MANYOSHU_HIRAGANA);
   RegisterCompositionCommand("InsertMacronVowel",
                              CompositionState::INSERT_MACRON_VOWEL);
-  RegisterCompositionCommand("ToggleBoundary",
-                             CompositionState::TOGGLE_BOUNDARY);
   RegisterCompositionCommand("LaunchWordRegisterDialog",
                              CompositionState::LAUNCH_WORD_REGISTER_DIALOG);
   if (kCompositionModeXCommandSupported) {

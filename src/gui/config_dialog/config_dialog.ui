@@ -1328,59 +1328,6 @@
         </widget>
        </item>
        <item>
-        <widget class="QWidget" name="miscSubSegmentWidget" native="true">
-         <property name="sizePolicy">
-          <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
-           <horstretch>0</horstretch>
-           <verstretch>0</verstretch>
-          </sizepolicy>
-         </property>
-         <layout class="QVBoxLayout" name="verticalLayout_subsegment">
-          <property name="spacing">
-           <number>10</number>
-          </property>
-          <property name="leftMargin">
-           <number>0</number>
-          </property>
-          <property name="topMargin">
-           <number>0</number>
-          </property>
-          <property name="rightMargin">
-           <number>5</number>
-          </property>
-          <property name="bottomMargin">
-           <number>0</number>
-          </property>
-          <item>
-           <widget class="QWidget" name="widget_subsegment" native="true">
-            <layout class="QHBoxLayout" name="horizontalLayout_subsegment">
-             <property name="margin">
-              <number>0</number>
-             </property>
-             <item>
-              <widget class="QLabel" name="subSegmentCandidateLimitLabel">
-               <property name="text">
-                <string>Sub-segment candidate limit</string>
-               </property>
-              </widget>
-             </item>
-             <item>
-              <widget class="QComboBox" name="subSegmentCandidateLimitComboBox">
-               <property name="minimumSize">
-                <size>
-                 <width>120</width>
-                 <height>0</height>
-                </size>
-               </property>
-              </widget>
-             </item>
-            </layout>
-           </widget>
-          </item>
-         </layout>
-        </widget>
-       </item>
-       <item>
         <widget class="QWidget" name="miscDefaultIMEWidget" native="true">
          <property name="sizePolicy">
           <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
@@ -1944,7 +1891,6 @@
   <tabstop>incognitoModeCheckBox</tabstop>
   <tabstop>presentationModeCheckBox</tabstop>
   <tabstop>candidateWindowComboBox</tabstop>
-  <tabstop>subSegmentCandidateLimitComboBox</tabstop>
   <tabstop>usageStatsCheckBox</tabstop>
   <tabstop>launchAdministrationDialogButtonForUsageStats</tabstop>
   <tabstop>checkDefaultCheckBox</tabstop>

@@ -32,11 +32,8 @@
 #include "engine/engine_output.h"
 
 #include <algorithm>
-#include <chrono>
 #include <cstddef>
 #include <cstdint>
-#include <fstream>
-#include <sstream>
 #include <string>
 #include <utility>
 #include <vector>
@@ -455,22 +452,12 @@ bool AddSegment(const absl::string_view key, const absl::string_view value,
 
 void FillPreedit(const composer::Composer& composer,
                  commands::Preedit* preedit) {
-  preedit->clear_segment();
   const std::string output = composer.GetStringForPreedit();
 
   constexpr uint32_t kBaseType = PREEDIT;
   AddSegment(output, output, kBaseType, preedit);
   preedit->set_cursor(static_cast<uint32_t>(composer.GetCursor()));
   preedit->set_is_toggleable(composer.IsToggleable());
-  // #region agent log
-  {
-    const bool has_pipe = (output.find('|') != std::string::npos);
-    std::ostringstream out;
-    out << "{\"sessionId\":\"1b2dce\",\"location\":\"engine_output.cc:FillPreedit\",\"message\":\"preedit_filled\",\"data\":{\"output_len\":" << output.size() << ",\"has_pipe\":" << (has_pipe ? "true" : "false") << ",\"segment_count\":" << preedit->segment_size() << "},\"timestamp\":" << std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count() << ",\"hypothesisId\":\"H4\"}\n";
-    std::ofstream f("/home/d/Python/marinaMoji/marinaMoji_Repo/.cursor/debug-1b2dce.log", std::ios::app);
-    if (f) { f << out.str(); }
-  }
-  // #endregion
 }
 
 void FillConversion(const Segments& segments, const size_t segment_index,
@@ -480,39 +467,15 @@ void FillConversion(const Segments& segments, const size_t segment_index,
   size_t cursor = 0;
   const Segments::const_range conversion_segments =
       segments.conversion_segments();
-  const Segment& current_segment = conversion_segments[segment_index];
-  const converter::Candidate& focused_candidate =
-      current_segment.candidate(candidate_id);
-  const bool is_partial =
-      (focused_candidate.attributes &
-       converter::Attribute::PARTIALLY_KEY_CONSUMED) != 0;
 
   for (const Segment& segment : conversion_segments) {
-    if (&segment == &current_segment) {
-      const std::string& value = focused_candidate.value;
-      if (is_partial) {
-        // Show partial value (e.g. 元) then remainder as reading (e.g. ぐう).
-        if (AddSegment(focused_candidate.key, value, kBaseType | FOCUSED,
-                       preedit) &&
-            (!preedit->has_highlighted_position())) {
-          preedit->set_highlighted_position(cursor);
-        }
-        cursor += Util::CharsLen(value);
-        const size_t consumed = focused_candidate.consumed_key_size;
-        const size_t seg_key_len = segment.key_len();
-        if (consumed < seg_key_len) {
-          const std::string remainder_key = std::string(
-              Util::Utf8SubString(segment.key(), consumed, seg_key_len - consumed));
-          AddSegment(remainder_key, remainder_key, kBaseType, preedit);
-          cursor += Util::CharsLen(remainder_key);
-        }
-      } else {
-        if (AddSegment(segment.key(), value, kBaseType | FOCUSED, preedit) &&
-            (!preedit->has_highlighted_position())) {
-          preedit->set_highlighted_position(cursor);
-        }
-        cursor += Util::CharsLen(value);
+    if (&segment == &conversion_segments[segment_index]) {
+      const std::string& value = segment.candidate(candidate_id).value;
+      if (AddSegment(segment.key(), value, kBaseType | FOCUSED, preedit) &&
+          (!preedit->has_highlighted_position())) {
+        preedit->set_highlighted_position(cursor);
       }
+      cursor += Util::CharsLen(value);
     } else {
       const std::string& value = segment.candidate(0).value;
       AddSegment(segment.key(), value, kBaseType, preedit);

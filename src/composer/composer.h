@@ -67,8 +67,7 @@ class ComposerData {
                commands::Context::InputFieldType input_field_type,
                std::string source_text,
                std::vector<commands::SessionCommand::CompositionEvent>
-                   compositions_for_handwriting,
-               std::vector<size_t> segment_boundaries = {});
+                   compositions_for_handwriting);
 
   // Copyable and movable.
   ComposerData(const ComposerData& other) = default;
@@ -99,10 +98,6 @@ class ComposerData {
 
   absl::Span<const commands::SessionCommand::CompositionEvent>
   GetHandwritingCompositions() const;
-
-  // Returns segment boundary positions (character indices). No conversion node
-  // may span across these positions.
-  absl::Span<const size_t> GetSegmentBoundaries() const;
 
   // Returns raw input from a user.
   // The main purpose is Transliteration.
@@ -145,9 +140,6 @@ class ComposerData {
   // Please refer to commands.proto
   std::vector<commands::SessionCommand::CompositionEvent>
       compositions_for_handwriting_;
-
-  // Character indices where a segment boundary is forced (no node may cross).
-  std::vector<size_t> segment_boundaries_;
 };
 
 // Composer is a class that manages the composing text. It provides methods to
@@ -309,11 +301,6 @@ class Composer final {
   void MoveCursorToEnd();
   void MoveCursorTo(uint32_t new_position);
 
-  // Toggle a segment boundary at the current cursor position. No conversion
-  // node may span this position. Used for "break key" (boundary only, not a
-  // literal character). Existing segment shrink/expand in conversion still works.
-  void ToggleBoundaryAtCursor();
-
   // Returns raw input from a user.
   // The main purpose is Transliteration.
   std::string GetRawString() const;
@@ -395,10 +382,6 @@ class Composer final {
   std::string GetTransliteratedText(Transliterators::Transliterator t12r,
                                     size_t position, size_t size) const;
 
-  // Adjust boundary positions after an insert at |pos| or delete at |pos|.
-  void AdjustBoundariesAfterInsert(size_t pos);
-  void AdjustBoundariesAfterDelete(size_t pos);
-
   size_t position_;
   transliteration::TransliterationType input_mode_;
   transliteration::TransliterationType output_mode_;
@@ -427,9 +410,6 @@ class Composer final {
   std::shared_ptr<const Table> table_;
 
   Composition composition_;
-
-  // Character positions where the user set a boundary (no segment may cross).
-  absl::btree_set<size_t> boundary_positions_;
 
   // Timestamp of last modified.
   int64_t timestamp_msec_ = 0;

@@ -153,7 +153,6 @@ struct CompositionState {
     TOGGLE_FULL_HALF_WIDTH,    // toggle half/full width
     TOGGLE_MANYOSHU_HIRAGANA,
     INSERT_MACRON_VOWEL,
-    TOGGLE_BOUNDARY,  // toggle segment boundary at cursor (break key)
     LAUNCH_WORD_REGISTER_DIALOG,  // Ctrl+0: add word (expression/reading prefill when available)
     // Switch input mode.
     COMPOSITION_MODE_HIRAGANA,
