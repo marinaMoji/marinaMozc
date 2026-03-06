@@ -119,8 +119,12 @@ ConfigDialog::ConfigDialog()
   candidateWindowComboBox->addItem(tr("IBus"), true);   // use_ibus_candidate_window
   candidateWindowComboBox->addItem(tr("Mozc"), false);
   LoadIbusCandidateWindowFromFile();
+  // Start in at system startup: Shin (modern) or Kyu (traditional). Index 0 = Shin, 1 = Kyu.
+  startKanjiModeComboBox->addItem(tr("Shin (modern)"));
+  startKanjiModeComboBox->addItem(tr("Kyu (traditional)"));
 #else
   miscCandidateWindowWidget->setVisible(false);
+  miscStartKanjiModeWidget->setVisible(false);
 #endif  // __linux__
 
 #ifdef NDEBUG
@@ -626,6 +630,9 @@ void ConfigDialog::ConvertFromProto(const config::Config &config) {
   SET_COMBOBOX(verboseLevelComboBox, int, verbose_level);
   SET_CHECKBOX(checkDefaultCheckBox, check_default);
   SET_COMBOBOX(yenSignComboBox, YenSignCharacter, yen_sign_character);
+#if defined(__linux__)
+  startKanjiModeComboBox->setCurrentIndex(config.use_traditional_kanji() ? 1 : 0);
+#endif  // __linux__
 
   characterFormEditor->Load(config);
 
@@ -719,6 +726,9 @@ void ConfigDialog::ConvertToProto(config::Config *config) const {
   config->set_verbose_level(verboseLevelComboBox->currentIndex());
   GET_CHECKBOX(checkDefaultCheckBox, check_default);
   GET_COMBOBOX(yenSignComboBox, YenSignCharacter, yen_sign_character);
+#if defined(__linux__)
+  config->set_use_traditional_kanji(startKanjiModeComboBox->currentIndex() == 1);
+#endif  // __linux__
 
   characterFormEditor->Save(config);
 }

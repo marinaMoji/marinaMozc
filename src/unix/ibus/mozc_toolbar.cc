@@ -470,6 +470,15 @@ static gboolean ShowIdleCb(gpointer data) {
     GdkWindow* gw = gtk_widget_get_window(g_toolbar_window);
     if (gw) gdk_window_raise(gw);
   }
+  // Set shin/kyu icon from current config so toolbar matches actual mode at startup.
+  if (g_trad_btn && g_engine) {
+    config::Config config;
+    if (g_engine->GetConfig(&config)) {
+      bool use_trad = config.use_traditional_kanji();
+      SetButtonIcon(GTK_BUTTON(g_trad_btn),
+                    use_trad ? "toolbar_kyu_light.svg" : "toolbar_shin_light.svg");
+    }
+  }
   return G_SOURCE_REMOVE;
 }
 
