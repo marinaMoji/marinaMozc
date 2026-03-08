@@ -572,6 +572,21 @@ bool Session::SendKey(commands::Command* command) {
     return ToggleManyoshuHiragana(command);
   }
 
+  // Macron dead key (AltGr+umlaut): next key a/e/i/o/u → ā ē ī ō ū
+  if (macron_dead_key_pending_) {
+    macron_dead_key_pending_ = false;
+    if (command->input().has_key() && command->input().key().has_key_code()) {
+      const uint32_t code = command->input().key().key_code();
+      switch (code) {
+        case 'a': case 'e': case 'i': case 'o': case 'u':
+        case 'A': case 'E': case 'I': case 'O': case 'U':
+          return InsertMacronVowel(command);
+        default:
+          break;
+      }
+    }
+  }
+
   bool result = false;
   switch (context_->state()) {
     case ImeContext::DIRECT:
@@ -668,6 +683,10 @@ bool Session::SendKeyDirectInputState(commands::Command* command) {
       return RequestConvertReverse(command);
     case keymap::DirectInputState::INSERT_MACRON_VOWEL:
       return InsertMacronVowel(command);
+    case keymap::DirectInputState::SET_MACRON_DEAD_KEY:
+      macron_dead_key_pending_ = true;
+      command->mutable_output()->set_consumed(true);
+      return true;
   }
   return false;
 }
@@ -722,6 +741,10 @@ bool Session::SendKeyPrecompositionState(commands::Command* command) {
       return ToggleManyoshuHiragana(command);
     case keymap::PrecompositionState::INSERT_MACRON_VOWEL:
       return InsertMacronVowel(command);
+    case keymap::PrecompositionState::SET_MACRON_DEAD_KEY:
+      macron_dead_key_pending_ = true;
+      command->mutable_output()->set_consumed(true);
+      return true;
     case keymap::PrecompositionState::REVERT:
       return Revert(command);
     case keymap::PrecompositionState::UNDO:
@@ -909,6 +932,10 @@ bool Session::SendKeyCompositionState(commands::Command* command) {
       return ToggleManyoshuHiragana(command);
     case keymap::CompositionState::INSERT_MACRON_VOWEL:
       return InsertMacronVowel(command);
+    case keymap::CompositionState::SET_MACRON_DEAD_KEY:
+      macron_dead_key_pending_ = true;
+      command->mutable_output()->set_consumed(true);
+      return true;
     case keymap::CompositionState::LAUNCH_WORD_REGISTER_DIALOG:
       return LaunchWordRegisterDialog(command);
     case keymap::CompositionState::COMPOSITION_MODE_HIRAGANA:
@@ -1070,6 +1097,10 @@ bool Session::SendKeyConversionState(commands::Command* command) {
       return ToggleManyoshuHiragana(command);
     case keymap::ConversionState::INSERT_MACRON_VOWEL:
       return InsertMacronVowel(command);
+    case keymap::ConversionState::SET_MACRON_DEAD_KEY:
+      macron_dead_key_pending_ = true;
+      command->mutable_output()->set_consumed(true);
+      return true;
     case keymap::ConversionState::COMPOSITION_MODE_HIRAGANA:
       return CompositionModeHiragana(command);
 
@@ -1285,6 +1316,7 @@ bool Session::ResetContext(commands::Command* command) {
 
   context_->mutable_converter()->Reset();
   last_committed_expression_.clear();
+  macron_dead_key_pending_ = false;
 
   SetStateToPredompositionAndCancel(context_.get());
   Output(command);
@@ -2083,7 +2115,11 @@ void Session::CommitStringDirectly(absl::string_view key,
   result->set_type(commands::Result::STRING);
   result->mutable_key()->append(key);
   result->mutable_value()->append(preedit);
-  SetSessionState(ImeContext::PRECOMPOSITION, context_.get());
+  // Stay in DIRECT when committing from DirectInput (e.g. InsertMacronVowel) so
+  // OutputMode() sets status.mode() to DIRECT and the toolbar stays correct.
+  if (context_->state() != ImeContext::DIRECT) {
+    SetSessionState(ImeContext::PRECOMPOSITION, context_.get());
+  }
 
   // Get suggestion if zero_query_suggestion is set.
   // zero_query_suggestion is usually set where the client is a mobile.
@@ -3131,12 +3167,13 @@ void Session::OutputMode(commands::Command* command) const {
   commands::Status* status = output->mutable_status();
   if (context_->state() == ImeContext::DIRECT) {
     output->set_mode(commands::DIRECT);
+    status->set_mode(commands::DIRECT);
     status->set_activated(false);
   } else {
     output->set_mode(mode);
+    status->set_mode(mode);
     status->set_activated(true);
   }
-  status->set_mode(mode);
   status->set_comeback_mode(comeback_mode);
 }
 

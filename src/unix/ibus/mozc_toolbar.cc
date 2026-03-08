@@ -311,7 +311,7 @@ static const char* GetModeIndicatorIconName(commands::CompositionMode mode,
                                              bool light) {
   switch (mode) {
     case commands::DIRECT:
-      return light ? "toolbar_roma_half_light.svg" : "toolbar_roma_half_dark.svg";
+      return light ? "toolbar_roman_light.svg" : "toolbar_roman_dark.svg";
     case commands::HIRAGANA:
       return light ? "toolbar_hira_light.svg" : "toolbar_hira_dark.svg";
     case commands::FULL_KATAKANA:

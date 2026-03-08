@@ -34,6 +34,26 @@ Composition	Ctrl Alt Shift E	InsertMacronVowel
 Composition	Ctrl Alt Shift I	InsertMacronVowel
 Composition	Ctrl Alt Shift O	InsertMacronVowel
 Composition	Ctrl Alt Shift U	InsertMacronVowel
+Composition	Ctrl RightAlt a	InsertMacronVowel
+Composition	Ctrl RightAlt e	InsertMacronVowel
+Composition	Ctrl RightAlt i	InsertMacronVowel
+Composition	Ctrl RightAlt o	InsertMacronVowel
+Composition	Ctrl RightAlt u	InsertMacronVowel
+Composition	Ctrl RightAlt Shift A	InsertMacronVowel
+Composition	Ctrl RightAlt Shift E	InsertMacronVowel
+Composition	Ctrl RightAlt Shift I	InsertMacronVowel
+Composition	Ctrl RightAlt Shift O	InsertMacronVowel
+Composition	Ctrl RightAlt Shift U	InsertMacronVowel
+Composition	Ctrl AltGr a	InsertMacronVowel
+Composition	Ctrl AltGr e	InsertMacronVowel
+Composition	Ctrl AltGr i	InsertMacronVowel
+Composition	Ctrl AltGr o	InsertMacronVowel
+Composition	Ctrl AltGr u	InsertMacronVowel
+Composition	Ctrl AltGr Shift A	InsertMacronVowel
+Composition	Ctrl AltGr Shift E	InsertMacronVowel
+Composition	Ctrl AltGr Shift I	InsertMacronVowel
+Composition	Ctrl AltGr Shift O	InsertMacronVowel
+Composition	Ctrl AltGr Shift U	InsertMacronVowel
 Composition	Ctrl Shift `	ToggleAlphanumericMode
 Composition	Ctrl Shift 5	ToggleHiraganaDirect
 Composition	Ctrl Shift ²	ToggleHiraganaDirect
@@ -112,6 +132,26 @@ Conversion	Ctrl Alt Shift E	InsertMacronVowel
 Conversion	Ctrl Alt Shift I	InsertMacronVowel
 Conversion	Ctrl Alt Shift O	InsertMacronVowel
 Conversion	Ctrl Alt Shift U	InsertMacronVowel
+Conversion	Ctrl RightAlt a	InsertMacronVowel
+Conversion	Ctrl RightAlt e	InsertMacronVowel
+Conversion	Ctrl RightAlt i	InsertMacronVowel
+Conversion	Ctrl RightAlt o	InsertMacronVowel
+Conversion	Ctrl RightAlt u	InsertMacronVowel
+Conversion	Ctrl RightAlt Shift A	InsertMacronVowel
+Conversion	Ctrl RightAlt Shift E	InsertMacronVowel
+Conversion	Ctrl RightAlt Shift I	InsertMacronVowel
+Conversion	Ctrl RightAlt Shift O	InsertMacronVowel
+Conversion	Ctrl RightAlt Shift U	InsertMacronVowel
+Conversion	Ctrl AltGr a	InsertMacronVowel
+Conversion	Ctrl AltGr e	InsertMacronVowel
+Conversion	Ctrl AltGr i	InsertMacronVowel
+Conversion	Ctrl AltGr o	InsertMacronVowel
+Conversion	Ctrl AltGr u	InsertMacronVowel
+Conversion	Ctrl AltGr Shift A	InsertMacronVowel
+Conversion	Ctrl AltGr Shift E	InsertMacronVowel
+Conversion	Ctrl AltGr Shift I	InsertMacronVowel
+Conversion	Ctrl AltGr Shift O	InsertMacronVowel
+Conversion	Ctrl AltGr Shift U	InsertMacronVowel
 Conversion	Ctrl Shift `	ToggleAlphanumericMode
 Conversion	Ctrl Shift 5	ToggleHiraganaDirect
 Conversion	Ctrl Shift ²	ToggleHiraganaDirect
@@ -183,6 +223,26 @@ DirectInput	Ctrl Alt Shift E	InsertMacronVowel
 DirectInput	Ctrl Alt Shift I	InsertMacronVowel
 DirectInput	Ctrl Alt Shift O	InsertMacronVowel
 DirectInput	Ctrl Alt Shift U	InsertMacronVowel
+DirectInput	Ctrl RightAlt a	InsertMacronVowel
+DirectInput	Ctrl RightAlt e	InsertMacronVowel
+DirectInput	Ctrl RightAlt i	InsertMacronVowel
+DirectInput	Ctrl RightAlt o	InsertMacronVowel
+DirectInput	Ctrl RightAlt u	InsertMacronVowel
+DirectInput	Ctrl RightAlt Shift A	InsertMacronVowel
+DirectInput	Ctrl RightAlt Shift E	InsertMacronVowel
+DirectInput	Ctrl RightAlt Shift I	InsertMacronVowel
+DirectInput	Ctrl RightAlt Shift O	InsertMacronVowel
+DirectInput	Ctrl RightAlt Shift U	InsertMacronVowel
+DirectInput	Ctrl AltGr a	InsertMacronVowel
+DirectInput	Ctrl AltGr e	InsertMacronVowel
+DirectInput	Ctrl AltGr i	InsertMacronVowel
+DirectInput	Ctrl AltGr o	InsertMacronVowel
+DirectInput	Ctrl AltGr u	InsertMacronVowel
+DirectInput	Ctrl AltGr Shift A	InsertMacronVowel
+DirectInput	Ctrl AltGr Shift E	InsertMacronVowel
+DirectInput	Ctrl AltGr Shift I	InsertMacronVowel
+DirectInput	Ctrl AltGr Shift O	InsertMacronVowel
+DirectInput	Ctrl AltGr Shift U	InsertMacronVowel
 DirectInput	Ctrl Shift 5	IMEOn
 DirectInput	Ctrl Shift ²	IMEOn
 Precomposition	ASCII	InsertCharacter
@@ -202,6 +262,26 @@ Precomposition	Ctrl Alt Shift E	InsertMacronVowel
 Precomposition	Ctrl Alt Shift I	InsertMacronVowel
 Precomposition	Ctrl Alt Shift O	InsertMacronVowel
 Precomposition	Ctrl Alt Shift U	InsertMacronVowel
+Precomposition	Ctrl RightAlt a	InsertMacronVowel
+Precomposition	Ctrl RightAlt e	InsertMacronVowel
+Precomposition	Ctrl RightAlt i	InsertMacronVowel
+Precomposition	Ctrl RightAlt o	InsertMacronVowel
+Precomposition	Ctrl RightAlt u	InsertMacronVowel
+Precomposition	Ctrl RightAlt Shift A	InsertMacronVowel
+Precomposition	Ctrl RightAlt Shift E	InsertMacronVowel
+Precomposition	Ctrl RightAlt Shift I	InsertMacronVowel
+Precomposition	Ctrl RightAlt Shift O	InsertMacronVowel
+Precomposition	Ctrl RightAlt Shift U	InsertMacronVowel
+Precomposition	Ctrl AltGr a	InsertMacronVowel
+Precomposition	Ctrl AltGr e	InsertMacronVowel
+Precomposition	Ctrl AltGr i	InsertMacronVowel
+Precomposition	Ctrl AltGr o	InsertMacronVowel
+Precomposition	Ctrl AltGr u	InsertMacronVowel
+Precomposition	Ctrl AltGr Shift A	InsertMacronVowel
+Precomposition	Ctrl AltGr Shift E	InsertMacronVowel
+Precomposition	Ctrl AltGr Shift I	InsertMacronVowel
+Precomposition	Ctrl AltGr Shift O	InsertMacronVowel
+Precomposition	Ctrl AltGr Shift U	InsertMacronVowel
 Precomposition	Ctrl Shift `	ToggleAlphanumericMode
 Precomposition	Ctrl Shift 5	ToggleHiraganaDirect
 Precomposition	Ctrl Shift ²	ToggleHiraganaDirect

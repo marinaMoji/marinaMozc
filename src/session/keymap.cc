@@ -483,6 +483,7 @@ void KeyMapManager::InitCommandData() {
   }
   RegisterDirectCommand("Reconvert", DirectInputState::RECONVERT);
   RegisterDirectCommand("InsertMacronVowel", DirectInputState::INSERT_MACRON_VOWEL);
+  RegisterDirectCommand("SetMacronDeadKey", DirectInputState::SET_MACRON_DEAD_KEY);
 
   // Precomposition
   RegisterPrecompositionCommand("IMEOff", PrecompositionState::IME_OFF);
@@ -513,6 +514,8 @@ void KeyMapManager::InitCommandData() {
                                 PrecompositionState::TOGGLE_MANYOSHU_HIRAGANA);
   RegisterPrecompositionCommand("InsertMacronVowel",
                                 PrecompositionState::INSERT_MACRON_VOWEL);
+  RegisterPrecompositionCommand("SetMacronDeadKey",
+                                PrecompositionState::SET_MACRON_DEAD_KEY);
   if (kCompositionModeXCommandSupported) {
     RegisterPrecompositionCommand(
         kCommandStringCompositionModeHiragana,
@@ -643,6 +646,8 @@ void KeyMapManager::InitCommandData() {
                              CompositionState::TOGGLE_MANYOSHU_HIRAGANA);
   RegisterCompositionCommand("InsertMacronVowel",
                              CompositionState::INSERT_MACRON_VOWEL);
+  RegisterCompositionCommand("SetMacronDeadKey",
+                             CompositionState::SET_MACRON_DEAD_KEY);
   RegisterCompositionCommand("LaunchWordRegisterDialog",
                              CompositionState::LAUNCH_WORD_REGISTER_DIALOG);
   if (kCompositionModeXCommandSupported) {
@@ -742,6 +747,8 @@ void KeyMapManager::InitCommandData() {
                            ConversionState::TOGGLE_MANYOSHU_HIRAGANA);
   RegisterConversionCommand("InsertMacronVowel",
                             ConversionState::INSERT_MACRON_VOWEL);
+  RegisterConversionCommand("SetMacronDeadKey",
+                            ConversionState::SET_MACRON_DEAD_KEY);
   RegisterConversionCommand("DisplayAsHiragana",
                             ConversionState::DISPLAY_AS_HIRAGANA);
   RegisterConversionCommand("DisplayAsFullKatakana",

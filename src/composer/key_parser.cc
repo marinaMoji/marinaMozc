@@ -73,6 +73,8 @@ constexpr auto kModifierKeyMap =
         {"leftalt", KeyEvent::LEFT_ALT},
         {"rightalt", KeyEvent::ALT},
         {"rightalt", KeyEvent::RIGHT_ALT},
+        {"altgr", KeyEvent::ALT},
+        {"altgr", KeyEvent::RIGHT_ALT},
         {"leftshift", KeyEvent::SHIFT},
         {"leftshift", KeyEvent::LEFT_SHIFT},
         {"rightshift", KeyEvent::SHIFT},

@@ -92,6 +92,10 @@ class PropertyHandler {
   // Returns original composition mode before.
   commands::CompositionMode GetOriginalCompositionMode() const;
 
+  // Force composition mode (e.g. after user selects Direct from toolbar so
+  // next key processing sees DIRECT). Used by MozcEngine::SetCompositionModeFromToolbar.
+  void SetOriginalCompositionMode(commands::CompositionMode mode);
+
   // Updates the Toolbar menu item toggle state. Call after toggling.
   void UpdateToolbarLabel(IbusEngineWrapper *engine, bool toolbar_visible);
 

@@ -502,6 +502,11 @@ void PropertyHandler::SetCompositionMode(
   is_activated_ = output.status().activated();
 }
 
+void PropertyHandler::SetOriginalCompositionMode(
+    commands::CompositionMode mode) {
+  original_composition_mode_ = mode;
+}
+
 void PropertyHandler::ProcessPropertyActivate(IbusEngineWrapper *engine,
                                               const char *property_name,
                                               uint property_state) {

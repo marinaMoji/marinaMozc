@@ -63,6 +63,7 @@
 #include "unix/ibus/ibus_config.h"
 #include "unix/ibus/ibus_wrapper.h"
 #include "unix/ibus/key_event_handler.h"
+#include "unix/ibus/key_translator.h"
 #include "unix/ibus/message_translator.h"
 #include "unix/ibus/path_util.h"
 #include "unix/ibus/mozc_toolbar.h"
@@ -403,6 +404,19 @@ bool MozcEngine::ProcessKeyEvent(IbusEngineWrapper *engine, uint keyval,
     return false;
   }
 
+  // Consume Hiragana/ON key in Direct before GetKeyEvent so we catch the ghost
+  // even when Translate would fail (e.g. unknown keysym). Do not consume when
+  // Ctrl+Alt are held (macron chord, translator converts to key_code 0x61).
+  if (property_handler_->GetOriginalCompositionMode() == commands::DIRECT) {
+    const bool has_ctrl_alt = (modifiers & IBUS_CONTROL_MASK) &&
+                              (modifiers & IBUS_MOD1_MASK);
+    if (!has_ctrl_alt &&
+        (keyval == IBUS_Hiragana || keyval == IBUS_Hiragana_Katakana ||
+         keyval == IBUS_Hangul)) {
+      return true;  // Consume; do not send to server.
+    }
+  }
+
   // layout_is_jp is only used determine Kana input with US layout.
   const absl::string_view layout = ibus_config_.GetLayout(engine->GetName());
   const bool layout_is_jp = (layout != "us");
@@ -415,6 +429,21 @@ bool MozcEngine::ProcessKeyEvent(IbusEngineWrapper *engine, uint keyval,
   }
 
   MOZC_VLOG(2) << key;
+
+  // In Direct input there are no Hiragana; the Hiragana/ON key would only
+  // trigger IMEOn and switch mode. Consume any KANA or ON key (with or without
+  // modifiers) so it never reaches the server. Ctrl+Alt+Hiragana is converted
+  // to key_code 0x61 in the translator, so it has no special_key and is not
+  // consumed. User switches to Hiragana via toolbar or Ctrl+Shift+5.
+  const bool switch_key =
+      key.has_special_key() && !key.has_key_code() &&
+      (key.special_key() == commands::KeyEvent::KANA ||
+       key.special_key() == commands::KeyEvent::ON);
+  if (switch_key &&
+      property_handler_->GetOriginalCompositionMode() == commands::DIRECT) {
+    return true;  // Consume; do not send to server.
+  }
+
   if (!property_handler_->IsActivated() && !client_->IsDirectModeCommand(key)) {
     return false;
   }
@@ -437,6 +466,22 @@ bool MozcEngine::ProcessKeyEvent(IbusEngineWrapper *engine, uint keyval,
   MOZC_VLOG(2) << output;
 
   UpdateAll(engine, output);
+
+  // After inserting a macron (Ctrl+Alt+vowel), force DIRECT so the next key
+  // (ghost Hiragana/ON from the layout) is consumed and does not switch mode.
+  if (key.has_key_code()) {
+    const uint32_t kc = key.key_code();
+    const bool is_vowel = (kc == 0x61 || kc == 0x65 || kc == 0x69 || kc == 0x6f || kc == 0x75) ||
+                          (kc == 0x41 || kc == 0x45 || kc == 0x49 || kc == 0x4f || kc == 0x55);
+    bool has_ctrl = false, has_alt = false;
+    for (int i = 0; i < key.modifier_keys_size(); ++i) {
+      if (key.modifier_keys(i) == commands::KeyEvent::CTRL) has_ctrl = true;
+      if (key.modifier_keys(i) == commands::KeyEvent::ALT) has_alt = true;
+    }
+    if (is_vowel && has_ctrl && has_alt) {
+      property_handler_->SetOriginalCompositionMode(commands::DIRECT);
+    }
+  }
 
   // Do not consume Right Shift release so IBus forwards the key-up to the app;
   // otherwise the app never sees the release and Shift stays stuck (capitals,
@@ -557,6 +602,11 @@ void MozcEngine::SetCompositionModeFromToolbar(
   // often on the toolbar so current_engine_ may be null; without this, state
   // was only updated in the else branch and direct mode did not activate.
   property_handler_->UpdateStateFromOutput(output);
+  // When user selected Direct, force mode to DIRECT so next key sees it (server
+  // may return comeback mode in output).
+  if (mode == commands::DIRECT) {
+    property_handler_->SetOriginalCompositionMode(commands::DIRECT);
+  }
   if (current_engine_ != nullptr) {
     IbusEngineWrapper wrapper(current_engine_);
     UpdateAll(&wrapper, output);

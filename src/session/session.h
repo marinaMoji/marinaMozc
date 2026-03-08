@@ -307,6 +307,11 @@ class Session {
   // dialog when Ctrl+0 is pressed in Precomposition (e.g. right after commit).
   std::string last_committed_expression_;
 
+  // When true, next key that is a/e/i/o/u (or shifted) will insert macron vowel
+  // (ā ē ī ō ū). Set by AltGr+umlaut (SetMacronDeadKey), cleared after use or
+  // on non-vowel / ResetContext.
+  bool macron_dead_key_pending_ = false;
+
   std::unique_ptr<ImeContext> CreateContext(
       const EngineInterface& engine) const;
 

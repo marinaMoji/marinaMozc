@@ -58,6 +58,7 @@ struct DirectInputState {
     COMPOSITION_MODE_HALF_ALPHANUMERIC,
     RECONVERT,
     INSERT_MACRON_VOWEL,  // Ctrl+Alt+vowel → ā ē ī ō ū (also in direct input)
+    SET_MACRON_DEAD_KEY,  // AltGr+umlaut (¨): next vowel → macron (ā ē ī ō ū)
   };
 };
 
@@ -80,6 +81,7 @@ struct PrecompositionState {
     TOGGLE_FULL_HALF_WIDTH,    // toggle half/full width
     TOGGLE_MANYOSHU_HIRAGANA,  // toggle 万葉集 (katakana preedit/candidates, dedupe) / Hiragana
     INSERT_MACRON_VOWEL,       // Ctrl+Alt+vowel → ā ē ī ō ū (ASCII mode only)
+    SET_MACRON_DEAD_KEY,       // AltGr+umlaut (¨): next vowel → macron
     // Switch input mode.
     COMPOSITION_MODE_HIRAGANA,
     COMPOSITION_MODE_FULL_KATAKANA,
@@ -153,6 +155,7 @@ struct CompositionState {
     TOGGLE_FULL_HALF_WIDTH,    // toggle half/full width
     TOGGLE_MANYOSHU_HIRAGANA,
     INSERT_MACRON_VOWEL,
+    SET_MACRON_DEAD_KEY,  // AltGr+umlaut (¨): next vowel → macron
     LAUNCH_WORD_REGISTER_DIALOG,  // Ctrl+0: add word (expression/reading prefill when available)
     // Switch input mode.
     COMPOSITION_MODE_HIRAGANA,
@@ -212,6 +215,7 @@ struct ConversionState {
     TOGGLE_FULL_HALF_WIDTH,   // toggle half/full width
     TOGGLE_MANYOSHU_HIRAGANA,
     INSERT_MACRON_VOWEL,
+    SET_MACRON_DEAD_KEY,  // AltGr+umlaut (¨): next vowel → macron
     // Switch input mode.
     COMPOSITION_MODE_HIRAGANA,
     COMPOSITION_MODE_FULL_KATAKANA,

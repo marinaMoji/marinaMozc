@@ -337,9 +337,14 @@ bool KeyTranslator::Translate(uint keyval, uint keycode, uint modifiers,
     keyval = IBUS_Katakana;
   }
   std::string kana_key_string;
-  if ((method == config::Config::KANA) &&
-      IsKanaAvailable(keyval, keycode, modifiers, layout_is_jp,
-                      &kana_key_string)) {
+  // On AZERTY, Ctrl+Alt+vowel can send Hiragana keysym and trigger IMEOn (schema
+  // switch). Treat Ctrl+Alt+Hiragana as Ctrl+Alt+a so InsertMacronVowel matches.
+  if ((modifiers & IBUS_CONTROL_MASK) && (modifiers & IBUS_MOD1_MASK) &&
+      keyval == IBUS_Hiragana) {
+    out_event->set_key_code(0x61);  // 'a' -> insert ā
+  } else if ((method == config::Config::KANA) &&
+             IsKanaAvailable(keyval, keycode, modifiers, layout_is_jp,
+                            &kana_key_string)) {
     out_event->set_key_code(keyval);
     out_event->set_key_string(kana_key_string);
   } else if (IsAscii(keyval, keycode, modifiers)) {
@@ -351,6 +356,14 @@ bool KeyTranslator::Translate(uint keyval, uint keycode, uint modifiers,
     // U+00B2 SUPERSCRIPT TWO (²); same physical key as backtick on AZERTY.
     // Pass through so Ctrl+Shift+² can be bound to ToggleAlphanumericMode.
     out_event->set_key_code(keyval);
+  } else if (keyval == 0x5E || keyval == 0xFE22) {
+    // U+005E CIRCUMFLEX ACCENT (^) or X11 keysym dead_circumflex (0xFE22).
+    // Keymap rule "RightAlt ^" for SetMacronDeadKey (macron dead key on some layouts).
+    out_event->set_key_code(0x5E);
+  } else if (keyval == 0xA8 || keyval == 0xFE20) {
+    // U+00A8 DIAERESIS (¨) or X11 keysym dead_diaeresis (0xFE20). On AZERTY the
+    // key often sends 0xFE20; keymap rule "RightAlt ¨" expects key_code 0xA8.
+    out_event->set_key_code(0xA8);
   } else if (const uint *mask = kIbusModifierMaskMap.FindOrNull(keyval);
              mask != nullptr) {
     // Convert Ibus modifier key to mask (e.g. IBUS_Shift_L to IBUS_SHIFT_MASK)
@@ -379,6 +392,12 @@ bool KeyTranslator::Translate(uint keyval, uint keycode, uint modifiers,
     out_event->add_modifier_keys(commands::KeyEvent::CTRL);
   }
   if (modifiers & IBUS_MOD1_MASK) {
+    out_event->add_modifier_keys(commands::KeyEvent::ALT);
+  }
+  // AltGr (Level3) on AZERTY etc. is often Mod3 or Mod5; treat as Right Alt so
+  // keymap rules like "RightAlt ¨" and "Ctrl RightAlt a" (macron) match.
+  if (modifiers & (IBUS_MOD3_MASK | IBUS_MOD5_MASK)) {
+    out_event->add_modifier_keys(commands::KeyEvent::RIGHT_ALT);
     out_event->add_modifier_keys(commands::KeyEvent::ALT);
   }
 

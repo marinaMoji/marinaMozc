@@ -28,6 +28,7 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "unix/ibus/key_event_handler.h"
+
 #include <cstddef>
 
 #include "absl/log/check.h"
@@ -64,11 +65,11 @@ bool KeyEventHandler::GetKeyEvent(uint keyval, uint keycode, uint modifiers,
   // Ignore key events with modifiers, except for the below;
   // - Alt (Mod1) - Mozc uses Alt for shortcuts
   // - NumLock (Mod2) - NumLock shouldn't impact shortcuts
+  // - Mod3/Mod5 (AltGr, Level3) - used for RightAlt+key on AZERTY etc.; we map to RIGHT_ALT in KeyTranslator
   // This is needed for handling shortcuts such as Super (Mod4) + Space,
   // IBus's default for switching input methods.
   // https://github.com/google/mozc/issues/853
-  constexpr uint kExtraModMask =
-      IBUS_MOD3_MASK | IBUS_MOD4_MASK | IBUS_MOD5_MASK;
+  constexpr uint kExtraModMask = IBUS_MOD4_MASK;
   if (modifiers & kExtraModMask) {
     return false;
   }
@@ -77,6 +78,15 @@ bool KeyEventHandler::GetKeyEvent(uint keyval, uint keycode, uint modifiers,
                                   layout_is_jp, key)) {
     LOG(ERROR) << "Translate failed";
     return false;
+  }
+
+  // On Dvorak etc., Right Alt often sends MOD1 only (not MOD3/MOD5). So
+  // Right Alt + vowel would be ALT+vowel, not RIGHT_ALT+vowel. If the physical
+  // Right Alt is down (we saw Alt_R in a previous event), treat MOD1 as RIGHT_ALT
+  // for character keys so keymap "Ctrl RightAlt a" (macron) matches.
+  if (key->has_key_code() && (modifiers & IBUS_MOD1_MASK) &&
+      currently_pressed_modifiers_.count(IBUS_Alt_R) != 0) {
+    key->add_modifier_keys(commands::KeyEvent::RIGHT_ALT);
   }
 
   const bool is_key_up = ((modifiers & IBUS_RELEASE_MASK) != 0);

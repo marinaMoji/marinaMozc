@@ -21,8 +21,11 @@ Composition	Ctrl p	ConvertToFullAlphanumeric
 Composition	Ctrl Right	MoveCursorToEnd
 Composition	Ctrl s	MoveCursorLeft
 Composition	Ctrl Shift 1	InsertOdorijiDefault
+Composition	Ctrl Shift !	InsertOdorijiDefault
 Composition	Ctrl Shift 2	ShowOdorijiPalette
+Composition	Ctrl Shift @	ShowOdorijiPalette
 Composition	Ctrl Shift 3	ToggleFullHalfWidth
+Composition	Ctrl Shift #	ToggleFullHalfWidth
 Composition	RightShift	ToggleManyoshuHiragana
 Composition	Ctrl Alt a	InsertMacronVowel
 Composition	Ctrl Alt e	InsertMacronVowel
@@ -34,8 +37,31 @@ Composition	Ctrl Alt Shift E	InsertMacronVowel
 Composition	Ctrl Alt Shift I	InsertMacronVowel
 Composition	Ctrl Alt Shift O	InsertMacronVowel
 Composition	Ctrl Alt Shift U	InsertMacronVowel
+Composition	Ctrl RightAlt a	InsertMacronVowel
+Composition	Ctrl RightAlt e	InsertMacronVowel
+Composition	Ctrl RightAlt i	InsertMacronVowel
+Composition	Ctrl RightAlt o	InsertMacronVowel
+Composition	Ctrl RightAlt u	InsertMacronVowel
+Composition	Ctrl RightAlt Shift A	InsertMacronVowel
+Composition	Ctrl RightAlt Shift E	InsertMacronVowel
+Composition	Ctrl RightAlt Shift I	InsertMacronVowel
+Composition	Ctrl RightAlt Shift O	InsertMacronVowel
+Composition	Ctrl RightAlt Shift U	InsertMacronVowel
+Composition	Ctrl AltGr a	InsertMacronVowel
+Composition	Ctrl AltGr e	InsertMacronVowel
+Composition	Ctrl AltGr i	InsertMacronVowel
+Composition	Ctrl AltGr o	InsertMacronVowel
+Composition	Ctrl AltGr u	InsertMacronVowel
+Composition	Ctrl AltGr Shift A	InsertMacronVowel
+Composition	Ctrl AltGr Shift E	InsertMacronVowel
+Composition	Ctrl AltGr Shift I	InsertMacronVowel
+Composition	Ctrl AltGr Shift O	InsertMacronVowel
+Composition	Ctrl AltGr Shift U	InsertMacronVowel
+Composition	RightAlt ¨	SetMacronDeadKey
+Composition	RightAlt ^	SetMacronDeadKey
 Composition	Ctrl Shift `	ToggleAlphanumericMode
 Composition	Ctrl Shift 5	ToggleHiraganaDirect
+Composition	Ctrl Shift %	ToggleHiraganaDirect
 Composition	Ctrl Shift ²	ToggleHiraganaDirect
 Composition	Ctrl Shift Space	InsertFullSpace
 Composition	Ctrl Space	InsertHalfSpace
@@ -89,8 +115,11 @@ Conversion	Ctrl p	ConvertToFullAlphanumeric
 Conversion	Ctrl Right	SegmentFocusLast
 Conversion	Ctrl s	SegmentFocusLeft
 Conversion	Ctrl Shift 1	InsertOdorijiDefault
+Conversion	Ctrl Shift !	InsertOdorijiDefault
 Conversion	Ctrl Shift 1	ShowOdorijiPalette
+Conversion	Ctrl Shift @	ShowOdorijiPalette
 Conversion	Ctrl Shift 3	ToggleFullHalfWidth
+Conversion	Ctrl Shift #	ToggleFullHalfWidth
 Conversion	RightShift	ToggleManyoshuHiragana
 Conversion	Ctrl RightAlt a	InsertMacronVowel
 Conversion	Ctrl RightAlt e	InsertMacronVowel
@@ -102,6 +131,16 @@ Conversion	Ctrl RightAlt Shift E	InsertMacronVowel
 Conversion	Ctrl RightAlt Shift I	InsertMacronVowel
 Conversion	Ctrl RightAlt Shift O	InsertMacronVowel
 Conversion	Ctrl RightAlt Shift U	InsertMacronVowel
+Conversion	Ctrl AltGr a	InsertMacronVowel
+Conversion	Ctrl AltGr e	InsertMacronVowel
+Conversion	Ctrl AltGr i	InsertMacronVowel
+Conversion	Ctrl AltGr o	InsertMacronVowel
+Conversion	Ctrl AltGr u	InsertMacronVowel
+Conversion	Ctrl AltGr Shift A	InsertMacronVowel
+Conversion	Ctrl AltGr Shift E	InsertMacronVowel
+Conversion	Ctrl AltGr Shift I	InsertMacronVowel
+Conversion	Ctrl AltGr Shift O	InsertMacronVowel
+Conversion	Ctrl AltGr Shift U	InsertMacronVowel
 Conversion	Ctrl LeftAlt a	InsertMacronVowel
 Conversion	Ctrl LeftAlt e	InsertMacronVowel
 Conversion	Ctrl LeftAlt i	InsertMacronVowel
@@ -112,8 +151,11 @@ Conversion	Ctrl LeftAlt Shift E	InsertMacronVowel
 Conversion	Ctrl LeftAlt Shift I	InsertMacronVowel
 Conversion	Ctrl LeftAlt Shift O	InsertMacronVowel
 Conversion	Ctrl LeftAlt Shift U	InsertMacronVowel
+Conversion	RightAlt ¨	SetMacronDeadKey
+Conversion	RightAlt ^	SetMacronDeadKey
 Conversion	Ctrl Shift `	ToggleAlphanumericMode
 Conversion	Ctrl Shift 5	ToggleAlphanumericMode
+Conversion	Ctrl Shift %	ToggleAlphanumericMode
 Conversion	Ctrl Shift ²	ToggleAlphanumericMode
 Conversion	Ctrl Shift F	ToggleTraditionalKanji
 Conversion	Ctrl Shift Space	InsertFullSpace
@@ -158,8 +200,11 @@ Precomposition	ASCII	InsertCharacter
 Precomposition	Backspace	Revert
 Precomposition	Ctrl Backspace	Undo
 Precomposition	Ctrl Shift 1	InsertOdorijiDefault
+Precomposition	Ctrl Shift !	InsertOdorijiDefault
 Precomposition	Ctrl Shift 1	ShowOdorijiPalette
+Precomposition	Ctrl Shift @	ShowOdorijiPalette
 Precomposition	Ctrl Shift 3	ToggleFullHalfWidth
+Precomposition	Ctrl Shift #	ToggleFullHalfWidth
 Precomposition	RightShift	ToggleManyoshuHiragana
 Precomposition	Ctrl RightAlt a	InsertMacronVowel
 Precomposition	Ctrl RightAlt e	InsertMacronVowel
@@ -171,6 +216,16 @@ Precomposition	Ctrl RightAlt Shift E	InsertMacronVowel
 Precomposition	Ctrl RightAlt Shift I	InsertMacronVowel
 Precomposition	Ctrl RightAlt Shift O	InsertMacronVowel
 Precomposition	Ctrl RightAlt Shift U	InsertMacronVowel
+Precomposition	Ctrl AltGr a	InsertMacronVowel
+Precomposition	Ctrl AltGr e	InsertMacronVowel
+Precomposition	Ctrl AltGr i	InsertMacronVowel
+Precomposition	Ctrl AltGr o	InsertMacronVowel
+Precomposition	Ctrl AltGr u	InsertMacronVowel
+Precomposition	Ctrl AltGr Shift A	InsertMacronVowel
+Precomposition	Ctrl AltGr Shift E	InsertMacronVowel
+Precomposition	Ctrl AltGr Shift I	InsertMacronVowel
+Precomposition	Ctrl AltGr Shift O	InsertMacronVowel
+Precomposition	Ctrl AltGr Shift U	InsertMacronVowel
 Precomposition	Ctrl LeftAlt a	InsertMacronVowel
 Precomposition	Ctrl LeftAlt e	InsertMacronVowel
 Precomposition	Ctrl LeftAlt i	InsertMacronVowel
@@ -181,8 +236,11 @@ Precomposition	Ctrl LeftAlt Shift E	InsertMacronVowel
 Precomposition	Ctrl LeftAlt Shift I	InsertMacronVowel
 Precomposition	Ctrl LeftAlt Shift O	InsertMacronVowel
 Precomposition	Ctrl LeftAlt Shift U	InsertMacronVowel
+Precomposition	RightAlt ¨	SetMacronDeadKey
+Precomposition	RightAlt ^	SetMacronDeadKey
 Precomposition	Ctrl Shift `	ToggleAlphanumericMode
 Precomposition	Ctrl Shift 5	ToggleHiraganaDirect
+Precomposition	Ctrl Shift %	ToggleHiraganaDirect
 Precomposition	Ctrl Shift ²	ToggleHiraganaDirect
 Precomposition	Ctrl Shift Space	InsertFullSpace
 Precomposition	Shift Space	InsertAlternateSpace
