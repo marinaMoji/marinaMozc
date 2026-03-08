@@ -15,6 +15,7 @@
 #ifdef MOZC_HAVE_GTK_TOOLBAR
 #include <gdk/gdk.h>
 #include <gdk/gdkpixbuf.h>
+#include <gio/gio.h>
 #include <glib.h>
 #include <gtk/gtk.h>
 #include <cairo/cairo.h>
@@ -77,6 +78,14 @@ int g_drag_offset_y = 0;
 int g_window_x = 0;
 int g_window_y = 0;
 static unsigned g_drag_motion_count = 0;
+
+// Theme: follow system light/dark (e.g. Linux Mint, GNOME, Cinnamon).
+static bool g_toolbar_dark_theme = false;
+static GtkCssProvider* g_toolbar_css_provider = nullptr;
+static commands::CompositionMode g_last_toolbar_mode = commands::HIRAGANA;
+static GSettings* g_theme_settings = nullptr;
+static gulong g_theme_signal_id_color = 0;
+static gulong g_theme_signal_id_gtk = 0;
 
 // Force toolbar to use X11/XWayland on GNOME Wayland so positioning and skip-taskbar work.
 // Call only before any GDK/GTK init; uses env only (no gdk_display_*).
@@ -147,6 +156,28 @@ static bool LoadHideOnFocusLossPreference() {
 static bool ShouldHideOnFocusLoss() {
   if (IsWayland()) return false;
   return LoadHideOnFocusLossPreference();
+}
+
+// Detect system dark mode (GNOME/Linux Mint/Cinnamon: color-scheme or gtk-theme name).
+static bool IsSystemThemeDark() {
+  GSettings* settings = g_settings_new("org.gnome.desktop.interface");
+  if (!settings) return false;
+  bool dark = false;
+  gchar* color_scheme = g_settings_get_string(settings, "color-scheme");
+  if (color_scheme) {
+    if (g_str_equal(color_scheme, "prefer-dark")) dark = true;
+    g_free(color_scheme);
+  }
+  if (!dark) {
+    gchar* gtk_theme = g_settings_get_string(settings, "gtk-theme");
+    if (gtk_theme) {
+      for (char* p = gtk_theme; *p; ++p) *p = g_ascii_tolower(*p);
+      if (strstr(gtk_theme, "dark")) dark = true;
+      g_free(gtk_theme);
+    }
+  }
+  g_object_unref(settings);
+  return dark;
 }
 
 static void CancelPendingHide() {
@@ -301,7 +332,8 @@ static const char* GetModeIndicatorIconName(commands::CompositionMode mode,
 
 static void UpdateModeIndicatorIcon(commands::CompositionMode mode) {
   if (!g_mode_indicator_image) return;
-  const char* icon_name = GetModeIndicatorIconName(mode, true);
+  bool light = !g_toolbar_dark_theme;
+  const char* icon_name = GetModeIndicatorIconName(mode, light);
   GdkPixbuf* pixbuf = LoadSvgIcon(icon_name, kIconSize, kIconSize);
   if (pixbuf) {
     gtk_image_set_from_pixbuf(GTK_IMAGE(g_mode_indicator_image), pixbuf);
@@ -309,9 +341,10 @@ static void UpdateModeIndicatorIcon(commands::CompositionMode mode) {
   }
 }
 
-// Create image from SVG for logo (wider than button icons).
-static GtkWidget* CreateLogoImage() {
-  GdkPixbuf* pixbuf = LoadSvgIcon("logo_long_light.svg", kToolbarLogoWidth, kIconSize);
+// Create image from SVG for logo (wider than button icons). |dark| = use dark-theme logo.
+static GtkWidget* CreateLogoImage(bool dark) {
+  const char* filename = dark ? "logo_long_dark.svg" : "logo_long_light.svg";
+  GdkPixbuf* pixbuf = LoadSvgIcon(filename, kToolbarLogoWidth, kIconSize);
   if (!pixbuf) return gtk_image_new();
   GtkWidget* img = gtk_image_new_from_pixbuf(pixbuf);
   g_object_unref(pixbuf);
@@ -446,12 +479,14 @@ static gboolean HideIdleCb(gpointer /*data*/) {
 
 static void EnsureToolbarCreated();  // defined below
 static void SetToolbarPosition(int x, int y);  // defined below
+static void RefreshToolbarTheme();  // defined below
 
 static gboolean ShowIdleCb(gpointer data) {
   MozcEngine* engine = static_cast<MozcEngine*>(data);
   if (!engine || engine != g_engine) return G_SOURCE_REMOVE;
   EnsureToolbarCreated();
   if (!g_toolbar_window) return G_SOURCE_REMOVE;
+  RefreshToolbarTheme();  // Pick up system theme changes while toolbar was hidden.
   gtk_window_set_keep_above(GTK_WINDOW(g_toolbar_window), TRUE);
   gboolean already_visible = gtk_widget_get_visible(g_toolbar_window);
   if (!already_visible) {
@@ -485,8 +520,9 @@ static gboolean ShowIdleCb(gpointer data) {
     config::Config config;
     if (g_engine->GetConfig(&config)) {
       bool use_trad = config.use_traditional_kanji();
-      SetButtonIcon(GTK_BUTTON(g_trad_btn),
-                    use_trad ? "toolbar_kyu_light.svg" : "toolbar_shin_light.svg");
+      const char* kyu = g_toolbar_dark_theme ? "toolbar_kyu_dark.svg" : "toolbar_kyu_light.svg";
+      const char* shin = g_toolbar_dark_theme ? "toolbar_shin_dark.svg" : "toolbar_shin_light.svg";
+      SetButtonIcon(GTK_BUTTON(g_trad_btn), use_trad ? kyu : shin);
     }
   }
   return G_SOURCE_REMOVE;
@@ -631,15 +667,28 @@ static gboolean OnFocusOut(GtkWidget* /*widget*/, GdkEventFocus* /*event*/,
   return FALSE;  // marinaMoji-style: window focus-out connected for consistency
 }
 
-static void EnsureToolbarCSS() {
-  GtkCssProvider* provider = gtk_css_provider_new();
-  const char* css =
+static void EnsureToolbarCSS(bool dark) {
+  const char* bg = dark
+      ? "rgba(32, 35, 40, 0.97)"
+      : "rgba(255, 255, 255, 0.97)";
+  const char* fg = dark ? "#e0e0e0" : "#203758";
+  const char* border = dark
+      ? "rgba(255, 255, 255, 0.12)"
+      : "rgba(0, 0, 0, 0.08)";
+  if (!g_toolbar_css_provider) {
+    g_toolbar_css_provider = gtk_css_provider_new();
+    gtk_style_context_add_provider_for_screen(
+        gdk_screen_get_default(),
+        GTK_STYLE_PROVIDER(g_toolbar_css_provider),
+        GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+  }
+  std::string css =
       "#marinamozc-toolbar-window { background-color: transparent; }"
       "#marinamozc-toolbar {"
-      "  background-color: rgba(255, 255, 255, 0.97);"
-      "  color: #203758;"
+      "  background-color: " + std::string(bg) + ";"
+      "  color: " + std::string(fg) + ";"
       "  border-radius: 10px;"
-      "  border: 1px solid rgba(0, 0, 0, 0.08);"
+      "  border: 1px solid " + std::string(border) + ";"
       "  padding: 6px 10px;"
       "}"
       "#marinamozc-mode-indicator,"
@@ -653,12 +702,74 @@ static void EnsureToolbarCSS() {
       "  background-color: transparent; border: none; box-shadow: none;"
       "  padding: 0; margin: 0; outline: none;"
       "}";
-  gtk_css_provider_load_from_data(provider, css, -1, nullptr);
-  gtk_style_context_add_provider_for_screen(
-      gdk_screen_get_default(),
-      GTK_STYLE_PROVIDER(provider),
-      GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
-  g_object_unref(provider);
+  gtk_css_provider_load_from_data(g_toolbar_css_provider, css.c_str(),
+                                  static_cast<gssize>(css.size()), nullptr);
+  if (g_toolbar_frame) gtk_widget_queue_draw(g_toolbar_frame);
+}
+
+// Re-apply theme (CSS + all icons) when system theme changes or on first show.
+static void RefreshToolbarTheme() {
+  g_toolbar_dark_theme = IsSystemThemeDark();
+  EnsureToolbarCSS(g_toolbar_dark_theme);
+  if (!g_toolbar_window) return;
+  // Logo: replace image inside g_logo_cell.
+  if (g_logo_cell) {
+    GList* children = gtk_container_get_children(GTK_CONTAINER(g_logo_cell));
+    if (children) {
+      gtk_container_remove(GTK_CONTAINER(g_logo_cell), GTK_WIDGET(children->data));
+      g_list_free(children);
+    }
+    GtkWidget* logo_img = CreateLogoImage(g_toolbar_dark_theme);
+    gtk_widget_set_halign(logo_img, GTK_ALIGN_CENTER);
+    gtk_widget_set_valign(logo_img, GTK_ALIGN_CENTER);
+    gtk_container_add(GTK_CONTAINER(g_logo_cell), logo_img);
+    gtk_widget_show(logo_img);
+  }
+  UpdateModeIndicatorIcon(g_last_toolbar_mode);
+  if (g_trad_btn && g_engine) {
+    config::Config config;
+    bool use_trad = false;
+    if (g_engine->GetConfig(&config)) use_trad = config.use_traditional_kanji();
+    SetButtonIcon(GTK_BUTTON(g_trad_btn),
+                  use_trad ? (g_toolbar_dark_theme ? "toolbar_kyu_dark.svg" : "toolbar_kyu_light.svg")
+                          : (g_toolbar_dark_theme ? "toolbar_shin_dark.svg" : "toolbar_shin_light.svg"));
+  }
+  if (g_odoriji_btn) {
+    SetButtonIcon(GTK_BUTTON(g_odoriji_btn),
+                  g_toolbar_dark_theme ? "toolbar_marks_dark.svg" : "toolbar_marks_light.svg");
+  }
+  if (g_dict_cell) {
+    GList* children = gtk_container_get_children(GTK_CONTAINER(g_dict_cell));
+    if (children && GTK_IS_IMAGE(children->data)) {
+      GdkPixbuf* dict_pixbuf = LoadSvgIcon(
+          g_toolbar_dark_theme ? "toolbar_dict_dark.svg" : "toolbar_dict_light.svg",
+          kIconSize, kIconSize);
+      if (dict_pixbuf) {
+        gtk_image_set_from_pixbuf(GTK_IMAGE(children->data), dict_pixbuf);
+        g_object_unref(dict_pixbuf);
+      }
+      g_list_free(children);
+    }
+  }
+  if (g_shortcuts_btn) {
+    SetButtonIcon(GTK_BUTTON(g_shortcuts_btn),
+                  g_toolbar_dark_theme ? "toolbar_shortcuts_dark.svg" : "toolbar_shortcuts_light.svg");
+  }
+}
+
+static void OnThemeChanged(GSettings* /*settings*/, const char* /*key*/,
+                          gpointer /*user_data*/) {
+  RefreshToolbarTheme();
+}
+
+static void RegisterToolbarThemeObserver() {
+  if (g_theme_settings) return;
+  g_theme_settings = g_settings_new("org.gnome.desktop.interface");
+  if (!g_theme_settings) return;
+  g_theme_signal_id_color = g_signal_connect(g_theme_settings, "changed::color-scheme",
+                                             G_CALLBACK(OnThemeChanged), nullptr);
+  g_theme_signal_id_gtk = g_signal_connect(g_theme_settings, "changed::gtk-theme",
+                                            G_CALLBACK(OnThemeChanged), nullptr);
 }
 
 // Shin/kyū: regular button (like odoriji); icon is updated from output, not toggle state.
@@ -1126,7 +1237,9 @@ void EnsureToolbarCreated() {
   MaybeForceX11OnGnomeWayland();
   if (!gtk_init_check(nullptr, nullptr)) return;
 
-  EnsureToolbarCSS();
+  g_toolbar_dark_theme = IsSystemThemeDark();
+  EnsureToolbarCSS(g_toolbar_dark_theme);
+  RegisterToolbarThemeObserver();
 
   // TOPLEVEL + DOCK (marinaMoji-style) for bottom-right placement; skip_taskbar still set.
   // keep_above + accept_focus/focus_on_map/can_focus false; draggable via gtk_window_begin_move_drag.
@@ -1203,7 +1316,7 @@ void EnsureToolbarCreated() {
   g_signal_connect(g_lead_cell, "button-press-event", G_CALLBACK(OnButtonPress), nullptr);
   gtk_box_pack_start(GTK_BOX(g_toolbar_box), g_lead_cell, FALSE, FALSE, 0);
 
-  GtkWidget* logo_img = CreateLogoImage();
+  GtkWidget* logo_img = CreateLogoImage(g_toolbar_dark_theme);
   gtk_widget_set_halign(logo_img, GTK_ALIGN_CENTER);
   gtk_widget_set_valign(logo_img, GTK_ALIGN_CENTER);
   g_logo_cell = gtk_event_box_new();
@@ -1216,8 +1329,9 @@ void EnsureToolbarCreated() {
   gtk_box_pack_start(GTK_BOX(g_toolbar_box), g_logo_cell, FALSE, FALSE, 0);
 
   // Mode indicator (marinaMoji-style: あ/ア/roma etc.) — same vertical alignment as other toolbar icons.
+  bool light = !g_toolbar_dark_theme;
   GdkPixbuf* mode_pixbuf =
-      LoadSvgIcon(GetModeIndicatorIconName(commands::HIRAGANA, true),
+      LoadSvgIcon(GetModeIndicatorIconName(commands::HIRAGANA, light),
                   kIconSize, kIconSize);
   g_mode_indicator_image = gtk_image_new_from_pixbuf(mode_pixbuf);
   if (mode_pixbuf) g_object_unref(mode_pixbuf);
@@ -1242,7 +1356,8 @@ void EnsureToolbarCreated() {
   gtk_widget_set_size_request(g_trad_btn, 32, 32);
   gtk_widget_set_name(g_trad_btn, "marinamozc-trad-btn");
   gtk_button_set_label(GTK_BUTTON(g_trad_btn), "");
-  SetButtonIcon(GTK_BUTTON(g_trad_btn), "toolbar_shin_light.svg");
+  SetButtonIcon(GTK_BUTTON(g_trad_btn),
+                g_toolbar_dark_theme ? "toolbar_shin_dark.svg" : "toolbar_shin_light.svg");
   g_signal_connect(g_trad_btn, "clicked", G_CALLBACK(OnTradClicked), nullptr);
   gtk_box_pack_start(GTK_BOX(g_toolbar_box), g_trad_btn, FALSE, FALSE, 0);
 
@@ -1253,12 +1368,14 @@ void EnsureToolbarCreated() {
   gtk_widget_set_size_request(g_odoriji_btn, 32, 32);
   gtk_widget_set_name(g_odoriji_btn, "marinamozc-odoriji-btn");
   gtk_button_set_label(GTK_BUTTON(g_odoriji_btn), "");
-  SetButtonIcon(GTK_BUTTON(g_odoriji_btn), "toolbar_marks_light.svg");
+  SetButtonIcon(GTK_BUTTON(g_odoriji_btn),
+                g_toolbar_dark_theme ? "toolbar_marks_dark.svg" : "toolbar_marks_light.svg");
   g_signal_connect(g_odoriji_btn, "clicked", G_CALLBACK(OnOdorijiClicked), nullptr);
   gtk_box_pack_start(GTK_BOX(g_toolbar_box), g_odoriji_btn, FALSE, FALSE, 0);
 
   // Dict button: left click = Add Word, right click = Dictionary tool.
-  GdkPixbuf* dict_pixbuf = LoadSvgIcon("toolbar_dict_light.svg", kIconSize, kIconSize);
+  const char* dict_icon = g_toolbar_dark_theme ? "toolbar_dict_dark.svg" : "toolbar_dict_light.svg";
+  GdkPixbuf* dict_pixbuf = LoadSvgIcon(dict_icon, kIconSize, kIconSize);
   GtkWidget* dict_img = gtk_image_new_from_pixbuf(dict_pixbuf);
   if (dict_pixbuf) g_object_unref(dict_pixbuf);
   gtk_widget_set_halign(dict_img, GTK_ALIGN_CENTER);
@@ -1282,7 +1399,8 @@ void EnsureToolbarCreated() {
   gtk_widget_set_size_request(g_shortcuts_btn, 32, 32);
   gtk_widget_set_name(g_shortcuts_btn, "marinamozc-shortcuts-btn");
   gtk_button_set_label(GTK_BUTTON(g_shortcuts_btn), "");
-  SetButtonIcon(GTK_BUTTON(g_shortcuts_btn), "toolbar_shortcuts_light.svg");
+  SetButtonIcon(GTK_BUTTON(g_shortcuts_btn),
+                g_toolbar_dark_theme ? "toolbar_shortcuts_dark.svg" : "toolbar_shortcuts_light.svg");
   g_signal_connect(g_shortcuts_btn, "clicked", G_CALLBACK(OnShortcutsClicked), nullptr);
   gtk_box_pack_start(GTK_BOX(g_toolbar_box), g_shortcuts_btn, FALSE, FALSE, 0);
 
@@ -1298,13 +1416,15 @@ void ApplyOutputToToolbar(const commands::Output& output) {
   if (!g_trad_btn || !g_odoriji_btn) return;
   if (output.has_config()) {
     bool use_trad = output.config().use_traditional_kanji();
-    SetButtonIcon(GTK_BUTTON(g_trad_btn),
-                  use_trad ? "toolbar_kyu_light.svg" : "toolbar_shin_light.svg");
+    const char* kyu = g_toolbar_dark_theme ? "toolbar_kyu_dark.svg" : "toolbar_kyu_light.svg";
+    const char* shin = g_toolbar_dark_theme ? "toolbar_shin_dark.svg" : "toolbar_shin_light.svg";
+    SetButtonIcon(GTK_BUTTON(g_trad_btn), use_trad ? kyu : shin);
   }
   if (output.has_status() && g_mode_indicator_image) {
     commands::CompositionMode mode = output.status().activated()
                                          ? output.status().mode()
                                          : commands::DIRECT;
+    g_last_toolbar_mode = mode;
     UpdateModeIndicatorIcon(mode);
   }
 }

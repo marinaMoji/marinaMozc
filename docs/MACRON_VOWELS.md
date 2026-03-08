@@ -15,6 +15,5 @@ You can type vowels with a macron (long-vowel mark) using the keyboard in **ASCI
 | Ctrl+Alt+Shift+O | Ō |
 | Ctrl+Alt+Shift+U | Ū |
 
-- Works with **either Alt key** (left or right).
 - **Active in ASCII mode and in Direct input**; in Hiragana/Katakana mode the key is passed through as normal input.
 - Available in all keymap layouts (MS-IME, ATOK, Kotoeri, Chrome OS, mobile).

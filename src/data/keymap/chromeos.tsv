@@ -99,7 +99,7 @@ Conversion	Ctrl RightAlt o	InsertMacronVowel
 Conversion	Ctrl RightAlt u	InsertMacronVowel
 Conversion	Ctrl RightAlt Shift A	InsertMacronVowel
 Conversion	Ctrl RightAlt Shift E	InsertMacronVowel
-Conversion	Ctrl Shift 2t Shift I	InsertMacronVowel
+Conversion	Ctrl RightAlt Shift I	InsertMacronVowel
 Conversion	Ctrl RightAlt Shift O	InsertMacronVowel
 Conversion	Ctrl RightAlt Shift U	InsertMacronVowel
 Conversion	Ctrl LeftAlt a	InsertMacronVowel
@@ -168,7 +168,7 @@ Precomposition	Ctrl RightAlt o	InsertMacronVowel
 Precomposition	Ctrl RightAlt u	InsertMacronVowel
 Precomposition	Ctrl RightAlt Shift A	InsertMacronVowel
 Precomposition	Ctrl RightAlt Shift E	InsertMacronVowel
-Precomposition	Ctrl Shift 2t Shift I	InsertMacronVowel
+Precomposition	Ctrl RightAlt Shift I	InsertMacronVowel
 Precomposition	Ctrl RightAlt Shift O	InsertMacronVowel
 Precomposition	Ctrl RightAlt Shift U	InsertMacronVowel
 Precomposition	Ctrl LeftAlt a	InsertMacronVowel
