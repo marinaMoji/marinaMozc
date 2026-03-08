@@ -60,6 +60,11 @@ class PropertyHandler {
   // Update properties.
   void Update(IbusEngineWrapper *engine, const commands::Output &output);
 
+  // Update only internal state (is_activated_, original_composition_mode_) from
+  // output, without pushing to the engine. Use when the engine is not available
+  // (e.g. Direct input chosen from toolbar with no focused text field).
+  void UpdateStateFromOutput(const commands::Output &output);
+
   void ProcessPropertyActivate(IbusEngineWrapper *engine,
                                const char *property_name, uint property_state);
 

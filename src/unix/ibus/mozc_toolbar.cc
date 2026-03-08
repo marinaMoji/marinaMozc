@@ -19,6 +19,8 @@
 #include <gtk/gtk.h>
 #include <cairo/cairo.h>
 #include <librsvg/rsvg.h>
+#include <cstdlib>
+#include <cstdio>
 #include <map>
 #include <cstring>
 #include <fstream>
@@ -59,6 +61,7 @@ bool g_toolbar_positioned = false;
 bool g_use_layer_shell = false;  // true if we used gtk-layer-shell for positioning
 bool g_toolbar_user_moved = false;  // user dragged toolbar; restore position on next show
 bool g_drag_active = false;
+
 // marinaMoji-style: debounced raise on Wayland to reduce flicker.
 static guint g_raise_idle_id = 0;
 static gint64 g_last_raise_time = 0;
@@ -73,6 +76,7 @@ int g_drag_offset_x = 0;
 int g_drag_offset_y = 0;
 int g_window_x = 0;
 int g_window_y = 0;
+static unsigned g_drag_motion_count = 0;
 
 // Force toolbar to use X11/XWayland on GNOME Wayland so positioning and skip-taskbar work.
 // Call only before any GDK/GTK init; uses env only (no gdk_display_*).
@@ -203,7 +207,7 @@ static bool IsButtonWidget(GtkWidget* widget) {
 static bool IsModeIndicatorWidget(GtkWidget* widget) {
   if (!widget || !g_mode_indicator_cell) return false;
   return (widget == g_mode_indicator_cell ||
-          gtk_widget_is_ancestor(g_mode_indicator_cell, widget));
+          gtk_widget_is_ancestor(widget, g_mode_indicator_cell));
 }
 
 // Menu entries for the mode-indicator popup (same order as IME panel).
@@ -224,18 +228,22 @@ static void OnModeMenuActivate(GtkMenuItem* item, gpointer /*user_data*/) {
   if (!g_engine) return;
   gpointer p = g_object_get_data(G_OBJECT(item), "composition-mode");
   if (!p) return;
-  auto mode = static_cast<commands::CompositionMode>(GPOINTER_TO_INT(p));
+  // Stored as (mode + 1) so DIRECT (0) is not NULL and get_data returns a valid pointer.
+  int mode_val = GPOINTER_TO_INT(p) - 1;
+  auto mode = static_cast<commands::CompositionMode>(mode_val);
   g_engine->SetCompositionModeFromToolbar(mode);
 }
 
 // Deferred destroy so "activate" is delivered before the menu is destroyed (marinaMoji-style).
+// Use a short timeout (150ms) so deactivate doesn't destroy the menu before the clicked item's
+// "activate" signal is processed (fixes Direct input / mode menu not applying on some setups).
 static gboolean ModeMenuDestroyIdle(gpointer user_data) {
   GtkWidget* menu = static_cast<GtkWidget*>(user_data);
   if (menu && GTK_IS_WIDGET(menu)) gtk_widget_destroy(menu);
   return G_SOURCE_REMOVE;
 }
 static void OnModeMenuDeactivate(GtkWidget* menu, gpointer /*user_data*/) {
-  if (menu) g_idle_add(ModeMenuDestroyIdle, menu);
+  if (menu) g_timeout_add(150, ModeMenuDestroyIdle, menu);
 }
 
 // Key press on menu: Escape closes it so user can dismiss without selecting.
@@ -254,8 +262,9 @@ static void ShowModeIndicatorMenu(GdkEventButton* event) {
   GtkWidget* menu = gtk_menu_new();
   for (const ModeMenuEntry& entry : kModeMenuEntries) {
     GtkWidget* item = gtk_menu_item_new_with_label(entry.label);
+    // Store (mode + 1) so DIRECT (0) is not stored as NULL (GINT_TO_POINTER(0) == NULL).
     g_object_set_data(G_OBJECT(item), "composition-mode",
-                      GINT_TO_POINTER(static_cast<int>(entry.mode)));
+                      GINT_TO_POINTER(static_cast<int>(entry.mode) + 1));
     g_signal_connect(item, "activate", G_CALLBACK(OnModeMenuActivate), nullptr);
     gtk_menu_shell_append(GTK_MENU_SHELL(menu), item);
   }
@@ -436,6 +445,7 @@ static gboolean HideIdleCb(gpointer /*data*/) {
 }
 
 static void EnsureToolbarCreated();  // defined below
+static void SetToolbarPosition(int x, int y);  // defined below
 
 static gboolean ShowIdleCb(gpointer data) {
   MozcEngine* engine = static_cast<MozcEngine*>(data);
@@ -447,7 +457,7 @@ static gboolean ShowIdleCb(gpointer data) {
   if (!already_visible) {
     gtk_widget_show_all(g_toolbar_window);
     if (g_toolbar_user_moved && (g_window_x != 0 || g_window_y != 0)) {
-      gtk_window_move(GTK_WINDOW(g_toolbar_window), g_window_x, g_window_y);
+      SetToolbarPosition(g_window_x, g_window_y);
     } else {
       MoveToBottomRight();
       g_toolbar_user_moved = false;
@@ -459,7 +469,7 @@ static gboolean ShowIdleCb(gpointer data) {
     }
   } else {
     if (g_toolbar_user_moved && (g_window_x != 0 || g_window_y != 0)) {
-      gtk_window_move(GTK_WINDOW(g_toolbar_window), g_window_x, g_window_y);
+      SetToolbarPosition(g_window_x, g_window_y);
     }
   }
   if (IsWayland()) {
@@ -516,7 +526,33 @@ static void SetupLayerShellBottomRight(GtkWidget* window) {
   gtk_layer_set_margin(GTK_WINDOW(window), GTK_LAYER_SHELL_EDGE_RIGHT, kToolbarMargin);
   gtk_layer_set_keyboard_mode(GTK_WINDOW(window), GTK_LAYER_SHELL_KEYBOARD_MODE_NONE);
 }
+
+// Reposition layer-shell by anchoring to top-left and setting margins (for drag).
+static void SetLayerShellPosition(GtkWindow* window, int x, int y) {
+  if (x < 0) x = 0;
+  if (y < 0) y = 0;
+  gtk_layer_set_anchor(window, GTK_LAYER_SHELL_EDGE_TOP, TRUE);
+  gtk_layer_set_anchor(window, GTK_LAYER_SHELL_EDGE_LEFT, TRUE);
+  gtk_layer_set_anchor(window, GTK_LAYER_SHELL_EDGE_BOTTOM, FALSE);
+  gtk_layer_set_anchor(window, GTK_LAYER_SHELL_EDGE_RIGHT, FALSE);
+  gtk_layer_set_margin(window, GTK_LAYER_SHELL_EDGE_LEFT, x);
+  gtk_layer_set_margin(window, GTK_LAYER_SHELL_EDGE_TOP, y);
+  gtk_layer_set_margin(window, GTK_LAYER_SHELL_EDGE_RIGHT, 0);
+  gtk_layer_set_margin(window, GTK_LAYER_SHELL_EDGE_BOTTOM, 0);
+}
 #endif
+
+// Set toolbar position; uses layer-shell anchors+margins on Wayland when layer-shell is active.
+static void SetToolbarPosition(int x, int y) {
+  if (!g_toolbar_window) return;
+#ifdef MOZC_HAVE_GTK_LAYER_SHELL
+  if (g_use_layer_shell) {
+    SetLayerShellPosition(GTK_WINDOW(g_toolbar_window), x, y);
+    return;
+  }
+#endif
+  gtk_window_move(GTK_WINDOW(g_toolbar_window), x, y);
+}
 
 static gboolean OnButtonPress(GtkWidget* widget, GdkEventButton* event,
                               gpointer /*data*/) {
@@ -533,17 +569,27 @@ static gboolean OnButtonPress(GtkWidget* widget, GdkEventButton* event,
   if (target && IsButtonWidget(target)) return FALSE;
   // marinaMoji-style: drag from anywhere else (logo, frame, box, spacers, gaps).
   g_toolbar_user_moved = true;
-  if (IsWayland()) {
+  // Use manual grab + motion + gtk_window_move everywhere: begin_move_drag does not move
+  // the window on many Wayland compositors; on X11 manual path is used for override_redirect.
+  const bool use_native_move = false;
+  if (use_native_move) {
     gtk_window_begin_move_drag(GTK_WINDOW(g_toolbar_window), event->button,
                                static_cast<gint>(event->x_root),
                                static_cast<gint>(event->y_root),
                                event->time);
     return TRUE;
   }
-  // X11 fallback: pointer grab + motion-notify + gtk_window_move.
-  gtk_window_get_position(GTK_WINDOW(g_toolbar_window), &g_window_x, &g_window_y);
-  g_drag_offset_x = static_cast<int>(event->x_root) - g_window_x;
-  g_drag_offset_y = static_cast<int>(event->y_root) - g_window_y;
+  // Pointer grab + motion, then SetToolbarPosition (gtk_window_move or layer-shell margins).
+  // On Wayland (with or without layer-shell) gtk_window_get_position is often unreliable;
+  // use window-relative offset so desired position = (x_root - event->x, y_root - event->y).
+  if (IsWayland() || g_use_layer_shell) {
+    g_drag_offset_x = static_cast<int>(event->x);
+    g_drag_offset_y = static_cast<int>(event->y);
+  } else {
+    gtk_window_get_position(GTK_WINDOW(g_toolbar_window), &g_window_x, &g_window_y);
+    g_drag_offset_x = static_cast<int>(event->x_root) - g_window_x;
+    g_drag_offset_y = static_cast<int>(event->y_root) - g_window_y;
+  }
   g_drag_active = true;
   gtk_grab_add(g_toolbar_window);
   return TRUE;
@@ -556,7 +602,9 @@ static gboolean OnButtonRelease(GtkWidget* /*widget*/, GdkEventButton* event,
     gtk_grab_remove(g_toolbar_window);
     g_drag_offset_x = 0;
     g_drag_offset_y = 0;
-    gtk_window_get_position(GTK_WINDOW(g_toolbar_window), &g_window_x, &g_window_y);
+    // g_window_x/y already updated in OnMotion; get_position is unreliable for layer-shell.
+    if (!g_use_layer_shell)
+      gtk_window_get_position(GTK_WINDOW(g_toolbar_window), &g_window_x, &g_window_y);
     return TRUE;
   }
   return FALSE;
@@ -567,7 +615,7 @@ static gboolean OnMotion(GtkWidget* /*widget*/, GdkEventMotion* event,
   if (!g_toolbar_window || !g_drag_active) return FALSE;
   gint new_x = static_cast<gint>(event->x_root) - g_drag_offset_x;
   gint new_y = static_cast<gint>(event->y_root) - g_drag_offset_y;
-  gtk_window_move(GTK_WINDOW(g_toolbar_window), new_x, new_y);
+  SetToolbarPosition(new_x, new_y);
   g_window_x = new_x;
   g_window_y = new_y;
   return TRUE;

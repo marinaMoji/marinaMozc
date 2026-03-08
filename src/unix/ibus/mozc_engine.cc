@@ -552,9 +552,17 @@ void MozcEngine::SetCompositionModeFromToolbar(
     LOG(ERROR) << "SetCompositionModeFromToolbar SendCommand failed";
     return;
   }
+  // Always sync property state from session so the chosen mode (e.g. Direct
+  // input) takes effect. When the user picks from the toolbar menu, focus is
+  // often on the toolbar so current_engine_ may be null; without this, state
+  // was only updated in the else branch and direct mode did not activate.
+  property_handler_->UpdateStateFromOutput(output);
   if (current_engine_ != nullptr) {
     IbusEngineWrapper wrapper(current_engine_);
     UpdateAll(&wrapper, output);
+  }
+  if (MozcToolbarAvailable()) {
+    MozcToolbarUpdate(output);
   }
 }
 

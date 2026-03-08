@@ -409,6 +409,12 @@ void PropertyHandler::Update(IbusEngineWrapper *engine,
   }
 }
 
+void PropertyHandler::UpdateStateFromOutput(const commands::Output &output) {
+  if (IsDisabled() || !output.has_status()) return;
+  is_activated_ = output.status().activated();
+  original_composition_mode_ = output.status().mode();
+}
+
 void PropertyHandler::UpdateCompositionModeIcon(
     IbusEngineWrapper *engine, commands::CompositionMode new_composition_mode) {
   if (!prop_composition_mode_.IsInitialized()) {

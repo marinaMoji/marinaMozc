@@ -1,35 +1,30 @@
-[Mozc - a Japanese Input Method Editor designed for multi-platform](https://github.com/google/mozc)
+<img src="src/unix/ibus/toolbar_icons/logo_long_light.svg" title="" alt="" width="303">
+
+A Japanese IME to turn back time
+
+[Marina Pandolfino](https://www.crcao.fr/membre/marina-pandolfino/) (EPHE) | [Daniel Patrick Morgan](https://www.crcao.fr/membre/daniel-patrick-morgan/) (CNRS)
+
+marinaMoji is a fork of [Mozc](https://github.com/google/mozc), Copyright 2010-2026 Google LLC, fine tuned for scholars of ancient and pre-modern Japanese.
+
 ===================================
-
-Copyright 2010-2026 Google LLC
-
-Mozc is a Japanese Input Method Editor (IME) designed for multi-platform such as
-Android OS, Apple macOS, Chromium OS, GNU/Linux and Microsoft Windows.  This
-OpenSource project originates from
-[Google Japanese Input](http://www.google.com/intl/ja/ime/).
-
-Mozc is not an officially supported Google product.
 
 Build Status
 ------------
 
-| Linux | Windows | macOS | Android lib |
-|:-----:|:-------:|:-----:|:-----------:|
-| [![Linux](https://github.com/google/mozc/actions/workflows/linux.yaml/badge.svg)](https://github.com/google/mozc/actions/workflows/linux.yaml) | [![Windows](https://github.com/google/mozc/actions/workflows/windows.yaml/badge.svg)](https://github.com/google/mozc/actions/workflows/windows.yaml) | [![macOS](https://github.com/google/mozc/actions/workflows/macos.yaml/badge.svg)](https://github.com/google/mozc/actions/workflows/macos.yaml) | [![Android lib](https://github.com/google/mozc/actions/workflows/android.yaml/badge.svg)](https://github.com/google/mozc/actions/workflows/android.yaml) |
+(coming)
 
+## Features
 
-What's Mozc?
-------------
-For historical reasons, the project name *Mozc* has two different meanings:
+marinaMoji provides the following features for scholarly Japanese text input:
 
-1. Internal code name of Google Japanese Input that is still commonly used
-   inside Google.
-2. Project name to release a subset of Google Japanese Input in the form of
-   source code under OSS license without any warranty nor user support.
-
-In this repository, *Mozc* means the second definition unless otherwise noted.
-
-Detailed differences between Google Japanese Input and Mozc are described in [About Branding](docs/about_branding.md).
+- **Kyūjitai/Shinjitai conversion:** Automatic conversion between modern and traditional characters via OpenCC (! currently improving conversion tables !).
+- **Historical kana input:** Direct input of historical kana forms (ゐ, ゑ, and historical distinctions)
+- **Full katakana mode:** convert katakana into kanji, as in hiragana mode; quickly switch between the two with `shift_R`.
+- **Historical marks palette:** Set default repetition mark (々, 〻, 〱, ゝ, ヽ, ヾ, ゞ, ヶ, etc.) via input palette (`ctrl+shift+2`) and insert via `ctrl+shift+1`. 
+- **Unicode kaeriten shortcuts:** directly type ㆑㆒㆓, etc., via `;r`, `;1`, `;2`, etc.
+- **Floating toolbar** - Visual mode indicator showing current input mode, shin/kyu,  with quick access to historical marks
+- **Macron vowels** - Input of macron vowels (ā, ē, ī, ō, ū) for scholarly transliteration in ASCII mode
+- **Quick dictionary injection:** type `ctrl+shift+0` in compose mode to immediately save kanji phrase and pronunciation to user dictionary.
 
 Build Instructions
 ------------------
@@ -38,22 +33,6 @@ Build Instructions
 * [How to build Mozc for Linux](docs/build_mozc_for_linux.md): for Linux desktop
 * [How to build Mozc for macOS](docs/build_mozc_in_osx.md): for macOS build
 * [How to build Mozc for Windows](docs/build_mozc_in_windows.md): for Windows
-
-Release Plan
-------------
-
-tl;dr. **There is no stable version.**
-
-As described in [About Branding](docs/about_branding.md) page, Google does
-not promise any official QA for OSS Mozc project.  Because of this,
-Mozc does not have a concept of *Stable Release*.  Instead we change version
-number every time when we introduce non-trivial change.  If you are
-interested in packaging Mozc source code, or developing your own products
-based on Mozc, feel free to pick up any version.  They should be equally
-stable (or equally unstable) in terms of no official QA process.
-
-[Release History](docs/release_history.md) page may have additional
-information and useful links about recent changes.
 
 License
 -------
@@ -66,20 +45,23 @@ outside [src/third_party](src/third_party) following directories contain
 third party code.
 
 ### [src/data/dictionary_oss/](src/data/dictionary_oss)
+
 Mixed.
 See [src/data/dictionary_oss/README.txt](src/data/dictionary_oss/README.txt)
 
 ### [src/data/test/dictionary/](src/data/test/dictionary)
+
 The same as [src/data/dictionary_oss/](src/data/dictionary_oss).
 See [src/data/dictionary_oss/README.txt](src/data/dictionary_oss/README.txt)
 
 ### [src/data/test/stress_test/](src/data/test/stress_test)
+
 Public Domain.  See the comment in
 [src/data/test/stress_test/sentences.txt](src/data/test/stress_test/sentences.txt)
 
 ## Install in CachyOS
 
-Install dependancies
+Install dependencies
 
 ```
 sudo pacman -S --needed \
@@ -91,6 +73,7 @@ sudo pacman -S --needed \
 ```
 
 install bazelisk
+
 ```
 # AUR (yay/paru)
 yay -S bazelisk
@@ -108,6 +91,7 @@ bazelisk build package --config oss_linux --config release_build
 ```
 
 Install
+
 ```
 sudo unzip -o bazel-bin/unix/mozc.zip -d /
 ```
@@ -116,6 +100,7 @@ sudo unzip -o bazel-bin/unix/mozc.zip -d /
 - **rules_swift aspect error:** If you see "required_aspect_providers, got element of type NoneType", ensure you use **bazelisk** (not system `bazel`) from the `src/` directory so the correct Bazel and dependency versions are used. This repo pins `rules_swift` to 2.5.0 and dependency overrides to avoid that failure on Linux.
 
 Reload ibus and add marinaMozc
+
 ```
 ibus write-cache
 ibus restart
