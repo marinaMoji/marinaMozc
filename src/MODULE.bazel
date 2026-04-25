@@ -36,10 +36,6 @@ bazel_dep(
     version = "20260107.1",
     repo_name = "com_google_absl",
 )
-single_version_override(
-    module_name = "abseil-cpp",
-    version = "20250814.0",
-)
 
 # protobuf: 34.1 2026-03-20
 # https://github.com/protocolbuffers/protobuf
@@ -47,10 +43,6 @@ bazel_dep(
     name = "protobuf",
     version = "34.1",
     repo_name = "com_google_protobuf",
-)
-single_version_override(
-    module_name = "protobuf",
-    version = "32.0",
 )
 
 # googletest: 1.17.0 2025-05-01
@@ -76,10 +68,6 @@ bazel_dep(
     name = "bazel_skylib",
     version = "1.9.0",
 )
-single_version_override(
-    module_name = "bazel_skylib",
-    version = "1.8.1",
-)
 
 # rules_pkg: 1.2.0 2025-12-04
 # https://github.com/bazelbuild/rules_pkg
@@ -93,10 +81,6 @@ bazel_dep(
 bazel_dep(
     name = "rules_python",
     version = "1.9.0",
-)
-single_version_override(
-    module_name = "rules_python",
-    version = "1.5.4",
 )
 
 # rules_apple: 4.5.2 2026-03-27
@@ -115,25 +99,6 @@ bazel_dep(
     name = "apple_support",
     version = "2.4.0",
     repo_name = "build_bazel_apple_support",
-)
-single_version_override(
-    module_name = "apple_support",
-    version = "1.23.1",
-)
-
-# rules_swift: 2.5.0 (pinned for compatibility with rules_apple on Linux)
-# https://github.com/bazelbuild/rules_swift/
-# While Mozc does not directly depend on rules_swift, it is used by rules_apple.
-# 3.1.2 can trigger "required_aspect_providers got NoneType" on Linux; 2.5.0
-# satisfies "2.5.0 or higher" for Windows (rules_swift#1502) and works with 4.1.2.
-bazel_dep(
-    name = "rules_swift",
-    version = "2.5.0",
-    repo_name = "build_bazel_rules_swift",
-)
-single_version_override(
-    module_name = "rules_swift",
-    version = "2.5.0",
 )
 
 # rules_cc: 0.2.17 2026-02-18
