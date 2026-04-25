@@ -5,15 +5,15 @@
    viewBox="0 0 16 16"
    fill="none"
    version="1.1"
-   id="svg2"
-   sodipodi:docname="hiragana.svg"
+   id="svg3"
+   sodipodi:docname="half_ascii_dark.svg"
    inkscape:version="1.4.3 (0d15f75042, 2025-12-25)"
    xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
    xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
    xmlns="http://www.w3.org/2000/svg"
    xmlns:svg="http://www.w3.org/2000/svg">
   <sodipodi:namedview
-     id="namedview2"
+     id="namedview3"
      pagecolor="#ffffff"
      bordercolor="#000000"
      borderopacity="0.25"
@@ -29,7 +29,7 @@
      inkscape:window-x="0"
      inkscape:window-y="0"
      inkscape:window-maximized="1"
-     inkscape:current-layer="svg2" />
+     inkscape:current-layer="svg3" />
   <!--
  Copyright 2010-2021, Google Inc.
  All rights reserved.
@@ -65,15 +65,20 @@
      height="16"
      rx="2"
      fill="url(#paint0_linear)"
-     id="rect1" />
+     id="rect1"
+     style="fill:#ffffff;fill-opacity:1" />
   <path
-     fill-rule="evenodd"
-     clip-rule="evenodd"
-     d="M7.086 7.5595C7.68 7.3705 8.3955 7.2085 9.2055 7.2085H9.273C8.76 8.5045 8.058 9.4495 7.2885 10.2055C7.167 9.49 7.086 8.7205 7.086 7.8835V7.5595ZM4.5885 11.677C4.1295 11.677 3.9 11.434 3.9 10.9345C3.9 10.0165 4.7235 8.8285 5.898 8.0995C5.898 9.1255 6.0195 10.165 6.195 11.0965C5.6145 11.4745 5.0475 11.677 4.5885 11.677V11.677ZM9.786 5.278C9.759 5.5075 9.705 5.8855 9.6375 6.1285C9.516 6.115 9.381 6.115 9.2595 6.115C8.598 6.115 7.8285 6.223 7.1265 6.412C7.167 5.926 7.2075 5.44 7.248 4.981C8.8815 4.9 10.6635 4.7245 12.0135 4.495L12 3.253C10.5825 3.577 9.057 3.7525 7.41 3.82C7.4505 3.496 7.5045 3.199 7.5585 2.9425C7.599 2.7535 7.653 2.5105 7.734 2.2945L6.33 2.2675C6.33 2.4565 6.3165 2.74 6.2895 2.9695C6.2625 3.226 6.2355 3.523 6.195 3.8605C5.9655 3.8605 5.7225 3.8605 5.4795 3.8605C4.791 3.8605 3.63 3.766 3.1575 3.685L3.198 4.9405C3.7785 4.9675 4.8045 5.0215 5.439 5.0215C5.6415 5.0215 5.8575 5.0215 6.0735 5.0215C6.0195 5.602 5.9655 6.223 5.9385 6.844C4.1025 7.708 2.6445 9.4765 2.6445 11.1775C2.6445 12.406 3.387 12.973 4.3185 12.973C5.034 12.973 5.8035 12.7165 6.4785 12.325C6.546 12.568 6.6135 12.784 6.681 12.973L7.896 12.6085C7.788 12.2845 7.68 11.9335 7.5855 11.569C8.6655 10.678 9.732 9.2335 10.461 7.384C11.568 7.735 12.1485 8.5585 12.1485 9.4765C12.1485 11.0155 10.8525 12.271 8.382 12.541L9.0975 13.6615C12.2565 13.1755 13.458 11.434 13.458 9.544C13.458 8.032 12.4455 6.817 10.839 6.331C10.92 6.1015 11.028 5.7775 11.0955 5.602L9.786 5.278Z"
+     d="M6.66299 13H1V11.8403H6.66299V13Z"
      fill="white"
-     id="path1" />
+     id="path1"
+     style="fill:#000000;fill-opacity:1" />
+  <path
+     d="M12.6348 9.78203H9.15174L8.42303 11.8403H6.79885L10.1954 3H11.5973L15 11.8403H13.3697L12.6348 9.78203ZM9.59021 8.54341H12.1963L10.8933 4.87614L9.59021 8.54341Z"
+     fill="white"
+     id="path2"
+     style="fill:#000000;fill-opacity:1" />
   <defs
-     id="defs2">
+     id="defs3">
     <linearGradient
        id="paint0_linear"
        x1="-8"
@@ -83,13 +88,13 @@
        gradientUnits="userSpaceOnUse">
       <stop
          stop-color="#EF6C00"
-         id="stop1"
+         id="stop2"
          offset="0"
          style="stop-color:#20395a;stop-opacity:1;" />
       <stop
          offset="1"
          stop-color="#D2660D"
-         id="stop2"
+         id="stop3"
          style="stop-color:#2d415c;stop-opacity:1;" />
     </linearGradient>
   </defs>
