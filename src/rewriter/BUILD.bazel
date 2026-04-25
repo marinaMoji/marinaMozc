@@ -732,7 +732,6 @@ mozc_cc_library(
     deps = [
         ":rewriter_interface",
         "//base:clock",
-        "//base:singleton",
         "//converter:attribute",
         "//converter:segments",
         "//request:conversion_request",
@@ -948,7 +947,7 @@ mozc_cc_binary(
     deps = [
         ":dictionary_generator",
         "//base:file_stream",
-        "//base:init_mozc_buildtool",
+        "//base:init_mozc",
         "//base:util",
         "//base:vlog",
         "//base/file:temp_dir",
@@ -973,7 +972,7 @@ mozc_cc_binary(
     visibility = ["//data_manager:__subpackages__"],
     deps = [
         "//base:file_stream",
-        "//base:init_mozc_buildtool",
+        "//base:init_mozc",
         "//data_manager:serialized_dictionary",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/flags:flag",
@@ -1001,6 +1000,7 @@ mozc_cc_library(
     deps = [
         ":rewriter_interface",
         ":rewriter_util",
+        "//base:bits",
         "//base:japanese_util",
         "//base:vlog",
         "//base/container:serialized_string_array",
@@ -1012,8 +1012,10 @@ mozc_cc_library(
         "//protocol:commands_cc_proto",
         "//protocol:config_cc_proto",
         "//request:conversion_request",
+        "@com_google_absl//absl/algorithm:container",
         "@com_google_absl//absl/log:check",
         "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/types:span",
     ],
     alwayslink = 1,
 )
@@ -1084,7 +1086,7 @@ mozc_cc_binary(
     srcs = ["gen_single_kanji_noun_prefix_data.cc"],
     visibility = ["//data_manager:__subpackages__"],
     deps = [
-        "//base:init_mozc_buildtool",
+        "//base:init_mozc",
         "//data_manager:serialized_dictionary",
         "@com_google_absl//absl/flags:flag",
     ],
@@ -1286,6 +1288,7 @@ mozc_cc_library(
     hdrs = ["environmental_filter_rewriter.h"],
     deps = [
         ":rewriter_interface",
+        "//base:bits",
         "//base:text_normalizer",
         "//base:util",
         "//base/container:serialized_string_array",
@@ -1361,7 +1364,7 @@ mozc_cc_binary(
     visibility = ["//data_manager:__subpackages__"],
     deps = [
         "//base:file_stream",
-        "//base:init_mozc_buildtool",
+        "//base:init_mozc",
         "//base/container:serialized_string_array",
         "@com_google_absl//absl/container:btree",
         "@com_google_absl//absl/flags:flag",
@@ -1381,6 +1384,7 @@ mozc_cc_library(
     ),
     deps = [
         ":rewriter_interface",
+        "//base:bits",
         "//base:util",
         "//base:vlog",
         "//base/container:serialized_string_array",
@@ -1390,9 +1394,11 @@ mozc_cc_library(
         "//dictionary:pos_matcher",
         "//protocol:config_cc_proto",
         "//request:conversion_request",
+        "@com_google_absl//absl/base:core_headers",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/log:check",
         "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/types:span",
     ],
 )
 
@@ -1647,7 +1653,7 @@ mozc_cc_binary(
     deps = [
         ":gen_existence_data",
         "//base:file_stream",
-        "//base:init_mozc_buildtool",
+        "//base:init_mozc",
         "@com_google_absl//absl/flags:flag",
         "@com_google_absl//absl/log",
     ],
@@ -1663,7 +1669,7 @@ mozc_cc_binary(
     deps = [
         ":gen_existence_data",
         "//base:file_stream",
-        "//base:init_mozc_buildtool",
+        "//base:init_mozc",
         "@com_google_absl//absl/flags:flag",
         "@com_google_absl//absl/log",
         "@com_google_absl//absl/log:check",

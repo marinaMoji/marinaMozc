@@ -38,8 +38,7 @@
 #include "dictionary/dictionary_interface.h"
 #include "dictionary/dictionary_token.h"
 #include "dictionary/pos_matcher.h"
-#include "dictionary/system/codec_interface.h"
-#include "request/conversion_request.h"
+#include "dictionary/system/codec.h"
 #include "storage/louds/louds_trie.h"
 
 namespace mozc {
@@ -48,22 +47,9 @@ namespace dictionary {
 using ::mozc::storage::louds::LoudsTrie;
 
 ValueDictionary::ValueDictionary(const PosMatcher& pos_matcher,
-                                 const LoudsTrie* value_trie)
+                                 const LoudsTrie& value_trie)
     : value_trie_(value_trie),
-      codec_(SystemDictionaryCodecFactory::GetCodec()),
       suggestion_only_word_id_(pos_matcher.GetSuggestOnlyWordId()) {}
-
-// ValueDictionary is supposed to use the same data with SystemDictionary
-// and SystemDictionary::HasKey should return the same result with
-// ValueDictionary::HasKey.  So we can skip the actual logic of HasKey
-// and return just false.
-bool ValueDictionary::HasKey(absl::string_view key) const { return false; }
-
-// ValueDictionary is supposed to use the same data with SystemDictionary
-// and SystemDictionary::HasValue should return the same result with
-// ValueDictionary::HasValue.  So we can skip the actual logic of HasValue
-// and return just false.
-bool ValueDictionary::HasValue(absl::string_view value) const { return false; }
 
 namespace {
 
@@ -93,15 +79,14 @@ inline bool IsValidKey(absl::string_view key) {
 }
 
 inline DictionaryInterface::Callback::ResultType HandleTerminalNode(
-    const LoudsTrie& value_trie, const SystemDictionaryCodecInterface& codec,
+    const LoudsTrie& value_trie, const SystemDictionaryCodec& codec,
     const uint16_t suggestion_only_word_id, const LoudsTrie::Node& node,
     DictionaryInterface::Callback* callback, char* encoded_value_buffer,
     std::string* value, Token* token) {
   const absl::string_view encoded_value =
       value_trie.RestoreKeyString(node, encoded_value_buffer);
 
-  value->clear();
-  codec.DecodeValue(encoded_value, value);
+  *value = codec.DecodeValue(encoded_value);
   DictionaryInterface::Callback::ResultType result = callback->OnKey(*value);
   if (result != DictionaryInterface::Callback::TRAVERSE_CONTINUE) {
     return result;
@@ -116,18 +101,14 @@ inline DictionaryInterface::Callback::ResultType HandleTerminalNode(
 
 }  // namespace
 
-void ValueDictionary::LookupPredictive(
-    absl::string_view key, const ConversionRequest& conversion_request,
-    Callback* callback) const {
+void ValueDictionary::LookupPredictive(absl::string_view key,
+                                       Callback* callback) const {
   if (!IsValidKey(key)) {
     return;
   }
 
-  std::string encoded_key;
-  codec_->EncodeValue(key, &encoded_key);
-
   LoudsTrie::Node node;
-  if (!value_trie_->Traverse(encoded_key, &node)) {
+  if (!value_trie_.Traverse(codec_.EncodeValue(key), &node)) {
     return;
   }
 
@@ -143,10 +124,10 @@ void ValueDictionary::LookupPredictive(
     node = queue.front();
     queue.pop();
 
-    if (value_trie_->IsTerminalNode(node)) {
-      switch (HandleTerminalNode(*value_trie_, *codec_,
-                                 suggestion_only_word_id_, node, callback,
-                                 encoded_value_buffer, &value, &token)) {
+    if (value_trie_.IsTerminalNode(node)) {
+      switch (HandleTerminalNode(value_trie_, codec_, suggestion_only_word_id_,
+                                 node, callback, encoded_value_buffer, &value,
+                                 &token)) {
         case Callback::TRAVERSE_DONE:
           return;
         case Callback::TRAVERSE_CULL:
@@ -156,27 +137,20 @@ void ValueDictionary::LookupPredictive(
       }
     }
 
-    for (value_trie_->MoveToFirstChild(&node); value_trie_->IsValidNode(node);
-         value_trie_->MoveToNextSibling(&node)) {
+    for (value_trie_.MoveToFirstChild(&node); value_trie_.IsValidNode(node);
+         value_trie_.MoveToNextSibling(&node)) {
       queue.push(node);
     }
   } while (!queue.empty());
 }
 
-void ValueDictionary::LookupPrefix(absl::string_view key,
-                                   const ConversionRequest& conversion_request,
-                                   Callback* callback) const {}
-
 void ValueDictionary::LookupExact(absl::string_view key,
-                                  const ConversionRequest& conversion_request,
                                   Callback* callback) const {
   if (!IsValidKey(key)) {
     return;
   }
 
-  std::string lookup_key_str;
-  codec_->EncodeValue(key, &lookup_key_str);
-  if (value_trie_->ExactSearch(lookup_key_str) == -1) {
+  if (value_trie_.ExactSearch(codec_.EncodeValue(key)) == -1) {
     return;
   }
   if (callback->OnKey(key) != Callback::TRAVERSE_CONTINUE) {
@@ -190,10 +164,6 @@ void ValueDictionary::LookupExact(absl::string_view key,
   FillToken(suggestion_only_word_id_, key, &token);
   callback->OnToken(key, key, token);
 }
-
-void ValueDictionary::LookupReverse(absl::string_view str,
-                                    const ConversionRequest& conversion_request,
-                                    Callback* callback) const {}
 
 }  // namespace dictionary
 }  // namespace mozc

@@ -159,7 +159,7 @@ struct Kana {
   absl::string_view non_shift;
   absl::string_view shift;
 
-  constexpr bool operator<(const Kana &other) const {
+  constexpr bool operator<(const Kana& other) const {
     return std::tie(non_shift, shift) < std::tie(other.non_shift, other.shift);
   }
 };
@@ -306,7 +306,7 @@ constexpr auto kKanaUsMap = CreateFlatMap<uint, Kana>({
 
 std::optional<absl::string_view> GetKanaValue(uint keyval, bool layout_is_jp,
                                               bool is_shift) {
-  const Kana *kana = layout_is_jp ? kKanaJpMap.FindOrNull(keyval)
+  const Kana* kana = layout_is_jp ? kKanaJpMap.FindOrNull(keyval)
                                   : kKanaUsMap.FindOrNull(keyval);
   if (kana == nullptr) {
     return std::nullopt;
@@ -323,7 +323,7 @@ namespace ibus {
 bool KeyTranslator::Translate(uint keyval, uint keycode, uint modifiers,
                               config::Config::PreeditMethod method,
                               bool layout_is_jp,
-                              commands::KeyEvent *out_event) const {
+                              commands::KeyEvent* out_event) const {
   DCHECK(out_event) << "out_event is nullptr";
   out_event->Clear();
 
@@ -364,7 +364,7 @@ bool KeyTranslator::Translate(uint keyval, uint keycode, uint modifiers,
     // U+00A8 DIAERESIS (¨) or X11 keysym dead_diaeresis (0xFE20). On AZERTY the
     // key often sends 0xFE20; keymap rule "RightAlt ¨" expects key_code 0xA8.
     out_event->set_key_code(0xA8);
-  } else if (const uint *mask = kIbusModifierMaskMap.FindOrNull(keyval);
+  } else if (const uint* mask = kIbusModifierMaskMap.FindOrNull(keyval);
              mask != nullptr) {
     // Convert Ibus modifier key to mask (e.g. IBUS_Shift_L to IBUS_SHIFT_MASK)
     modifiers |= *mask;
@@ -372,7 +372,7 @@ bool KeyTranslator::Translate(uint keyval, uint keycode, uint modifiers,
     if (keyval == IBUS_Shift_R) {
       out_event->add_modifier_keys(commands::KeyEvent::RIGHT_SHIFT);
     }
-  } else if (const commands::KeyEvent::SpecialKey *key =
+  } else if (const commands::KeyEvent::SpecialKey* key =
                  kSpecialKeyMap.FindOrNull(keyval);
              key != nullptr) {
     out_event->set_special_key(*key);
@@ -410,7 +410,7 @@ bool KeyTranslator::IsHiraganaKatakanaKeyWithShift(uint keyval, uint keycode,
 }
 
 bool KeyTranslator::IsKanaAvailable(uint keyval, uint keycode, uint modifiers,
-                                    bool layout_is_jp, std::string *out) const {
+                                    bool layout_is_jp, std::string* out) const {
   if ((modifiers & IBUS_CONTROL_MASK) || (modifiers & IBUS_MOD1_MASK)) {
     return false;
   }

@@ -30,7 +30,9 @@
 #ifndef MOZC_DICTIONARY_DICTIONARY_INTERFACE_H_
 #define MOZC_DICTIONARY_DICTIONARY_INTERFACE_H_
 
+#include <functional>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "absl/strings/string_view.h"
@@ -108,6 +110,8 @@ class DictionaryInterface {
       return TRAVERSE_CONTINUE;
     }
 
+    virtual bool IsKanaModifierInsensitiveConversion() const { return false; }
+
    protected:
     Callback() = default;
   };
@@ -115,34 +119,71 @@ class DictionaryInterface {
   virtual ~DictionaryInterface() = default;
 
   // Returns true if the dictionary has an entry for the given key.
-  virtual bool HasKey(absl::string_view key) const = 0;
+  virtual bool HasKey(absl::string_view key) const { return false; }
 
   // Returns true if the dictionary has an entry for the given value.
-  virtual bool HasValue(absl::string_view value) const = 0;
+  virtual bool HasValue(absl::string_view value) const { return false; }
+
+  // Looks up values whose keys start from the key.
+  // (e.g. key = "abc" -> {"abc": "ABC", "abcd": "ABCD"})
+  virtual void LookupPredictive(absl::string_view key,
+                                Callback* callback) const {}
+
+  // Looks up values whose keys are prefixes of the key.
+  // (e.g. key = "abc" -> {"abc": "ABC", "a": "A"})
+  virtual void LookupPrefix(absl::string_view key, Callback* callback) const {}
+
+  // Looks up values whose keys are same with the key.
+  // (e.g. key = "abc" -> {"abc": "ABC"})
+  virtual void LookupExact(absl::string_view key, Callback* callback) const {}
+
+  // For reverse lookup, the reading is stored in Token::value and the word
+  // is stored in Token::key.
+  virtual void LookupReverse(absl::string_view str, Callback* callback) const {}
+
+  // Looks up a user comment from a pair of key and value.  When (key, value)
+  // doesn't exist in this dictionary or user comment is empty, bool is
+  // returned and string is kept as-is.
+  virtual bool LookupComment(absl::string_view key, absl::string_view value,
+                             std::string* comment) const {
+    return false;
+  }
+
+  // Legacy interfaces with conversion_request.
+  // TODO(taku): Gets rid of the dependency from Dictionary to
+  // ConversionRequest.
 
   // Looks up values whose keys start from the key.
   // (e.g. key = "abc" -> {"abc": "ABC", "abcd": "ABCD"})
   virtual void LookupPredictive(absl::string_view key,
                                 const ConversionRequest& conversion_request,
-                                Callback* callback) const = 0;
+                                Callback* callback) const {
+    return LookupPredictive(key, callback);
+  }
 
   // Looks up values whose keys are prefixes of the key.
   // (e.g. key = "abc" -> {"abc": "ABC", "a": "A"})
   virtual void LookupPrefix(absl::string_view key,
                             const ConversionRequest& conversion_request,
-                            Callback* callback) const = 0;
+                            Callback* callback) const {
+    return LookupPrefix(key, callback);
+  }
 
   // Looks up values whose keys are same with the key.
   // (e.g. key = "abc" -> {"abc": "ABC"})
   virtual void LookupExact(absl::string_view key,
                            const ConversionRequest& conversion_request,
-                           Callback* callback) const = 0;
+                           Callback* callback) const {
+    return LookupExact(key, callback);
+  }
 
   // For reverse lookup, the reading is stored in Token::value and the word
   // is stored in Token::key.
   virtual void LookupReverse(absl::string_view str,
                              const ConversionRequest& conversion_request,
-                             Callback* callback) const = 0;
+                             Callback* callback) const {
+    return LookupReverse(str, callback);
+  }
 
   // Looks up a user comment from a pair of key and value.  When (key, value)
   // doesn't exist in this dictionary or user comment is empty, bool is
@@ -150,7 +191,7 @@ class DictionaryInterface {
   virtual bool LookupComment(absl::string_view key, absl::string_view value,
                              const ConversionRequest& conversion_request,
                              std::string* comment) const {
-    return false;
+    return LookupComment(key, value, comment);
   }
 
   // Populates cache for LookupReverse().
@@ -162,6 +203,68 @@ class DictionaryInterface {
  protected:
   // Do not allow instantiation
   DictionaryInterface() = default;
+};
+
+// Inline callback with lambda functions.
+//
+// Example:
+// InlineCallback cb;
+//  cb.OnKey([](auto key) {
+//    std::cout << "Checking key: " << key << "\n";
+//    return Callback::TRAVERSE_CONTINUE;
+//  })
+//  .OnToken([](auto key, auto exp, const auto& token) {
+//    return Callback::TRAVERSE_DONE;
+//  });
+//
+//  dictionary.PrefixLookup("key", request, &cb);
+
+class InlineCallback : public DictionaryInterface::Callback {
+ public:
+  using ResultType = DictionaryInterface::Callback::ResultType;
+  using KeyHandler = std::function<ResultType(absl::string_view)>;
+  using ActualKeyHandler =
+      std::function<ResultType(absl::string_view, absl::string_view, int)>;
+  using TokenHandler = std::function<ResultType(
+      absl::string_view, absl::string_view, const Token&)>;
+
+  InlineCallback() = default;
+
+  InlineCallback& OnKey(KeyHandler handler) {
+    key_handler_ = std::move(handler);
+    return *this;
+  }
+
+  InlineCallback& OnActualKey(ActualKeyHandler handler) {
+    actual_handler_ = std::move(handler);
+    return *this;
+  }
+
+  InlineCallback& OnToken(TokenHandler handler) {
+    token_handler_ = std::move(handler);
+    return *this;
+  }
+
+  ResultType OnKey(absl::string_view key) override {
+    return key_handler_ ? key_handler_(key) : TRAVERSE_CONTINUE;
+  }
+
+  ResultType OnActualKey(absl::string_view key, absl::string_view actual_key,
+                         int num_expanded) override {
+    return actual_handler_ ? actual_handler_(key, actual_key, num_expanded)
+                           : TRAVERSE_CONTINUE;
+  }
+
+  ResultType OnToken(absl::string_view key, absl::string_view expanded_key,
+                     const Token& token_info) override {
+    return token_handler_ ? token_handler_(key, expanded_key, token_info)
+                          : TRAVERSE_CONTINUE;
+  }
+
+ private:
+  KeyHandler key_handler_;
+  ActualKeyHandler actual_handler_;
+  TokenHandler token_handler_;
 };
 
 class UserDictionaryInterface : public DictionaryInterface {

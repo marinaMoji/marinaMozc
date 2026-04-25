@@ -60,6 +60,7 @@
 #include "dictionary/user_dictionary_importer.h"
 #include "dictionary/user_dictionary_storage.h"
 #include "dictionary/user_dictionary_util.h"
+#include "dictionary/user_pos.h"
 #include "gui/base/encoding_util.h"
 #include "gui/base/util.h"
 #include "gui/config_dialog/combobox_delegate.h"
@@ -313,7 +314,7 @@ DictionaryTool::DictionaryTool(QWidget* parent)
     : QMainWindow(parent),
       import_dialog_(nullptr),
       find_dialog_(nullptr),
-      storage_(new UserDictionaryStorage()),
+      storage_(std::make_unique<UserDictionaryStorage>()),
       current_dic_id_(0),
       window_title_(GuiUtil::ProductName()),
       dic_menu_(new QMenu),
@@ -637,7 +638,7 @@ void DictionaryTool::SetupDicContentEditor(const DictionaryInfo& dic_info) {
       dic_content_->setItem(
           i, 2,
           new QTableWidgetItem(
-              QUtf8(user_dictionary::GetStringPosType(entry.pos()))));
+              QUtf8(dictionary::UserPos::GetStringPosType(entry.pos()))));
       dic_content_->setItem(i, 3, new QTableWidgetItem(QUtf8(entry.comment())));
       progress->setValue(i);
     }
@@ -1164,7 +1165,7 @@ void DictionaryTool::MoveTo(int dictionary_row) {
         entry->set_value(dic_content_->item(row, 1)->text().toStdString());
         // TODO(yuryu): remove c_str() after changing ToPosType to take
         // absl::string_view.
-        entry->set_pos(user_dictionary::ToPosType(
+        entry->set_pos(dictionary::UserPos::ToPosType(
             dic_content_->item(row, 2)->text().toStdString()));
         entry->set_comment(dic_content_->item(row, 3)->text().toStdString());
         user_dictionary::SanitizeEntry(entry);
@@ -1396,7 +1397,7 @@ void DictionaryTool::SyncToStorage() {
     entry->set_value(dic_content_->item(i, 1)->text().toStdString());
     // TODO(yuryu): remove c_str() after changing ToPosType to take
     // absl::string_view.
-    entry->set_pos(user_dictionary::ToPosType(
+    entry->set_pos(dictionary::UserPos::ToPosType(
         dic_content_->item(i, 2)->text().toStdString()));
     entry->set_comment(dic_content_->item(i, 3)->text().toStdString());
     user_dictionary::SanitizeEntry(entry);

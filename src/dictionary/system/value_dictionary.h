@@ -41,8 +41,7 @@
 #include "absl/strings/string_view.h"
 #include "dictionary/dictionary_interface.h"
 #include "dictionary/pos_matcher.h"
-#include "dictionary/system/codec_interface.h"
-#include "request/conversion_request.h"
+#include "dictionary/system/codec.h"
 #include "storage/louds/louds_trie.h"
 
 namespace mozc {
@@ -52,30 +51,18 @@ class ValueDictionary : public DictionaryInterface {
  public:
   // This class doesn't take the ownership of |value_trie|.
   ValueDictionary(const PosMatcher& pos_matcher,
-                  const storage::louds::LoudsTrie* value_trie);
+                  const storage::louds::LoudsTrie& value_trie);
 
   ValueDictionary(const ValueDictionary&) = delete;
   ValueDictionary& operator=(const ValueDictionary&) = delete;
 
-  // Implementation of DictionaryInterface
-  bool HasKey(absl::string_view key) const override;
-  bool HasValue(absl::string_view value) const override;
   void LookupPredictive(absl::string_view key,
-                        const ConversionRequest& conversion_request,
                         Callback* callback) const override;
-  void LookupPrefix(absl::string_view key,
-                    const ConversionRequest& conversion_request,
-                    Callback* callback) const override;
-  void LookupExact(absl::string_view key,
-                   const ConversionRequest& conversion_request,
-                   Callback* callback) const override;
-  void LookupReverse(absl::string_view str,
-                     const ConversionRequest& conversion_request,
-                     Callback* callback) const override;
+  void LookupExact(absl::string_view key, Callback* callback) const override;
 
  private:
-  const storage::louds::LoudsTrie* value_trie_;
-  const SystemDictionaryCodecInterface* codec_;
+  const storage::louds::LoudsTrie& value_trie_;
+  const SystemDictionaryCodec codec_;
   const uint16_t suggestion_only_word_id_;
 };
 

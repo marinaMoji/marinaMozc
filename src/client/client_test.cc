@@ -43,7 +43,6 @@
 #include "absl/strings/string_view.h"
 #include "base/number_util.h"
 #include "base/strings/assign.h"
-#include "base/strings/zstring_view.h"
 #include "base/version.h"
 #include "client/client_interface.h"
 #include "composer/key_parser.h"
@@ -61,7 +60,7 @@ namespace client {
 
 class ClientTestPeer : public testing::TestPeer<Client> {
  public:
-  explicit ClientTestPeer(Client &client) : testing::TestPeer<Client>(client) {}
+  explicit ClientTestPeer(Client& client) : testing::TestPeer<Client>(client) {}
 
   PEER_METHOD(GetHistoryInputs);
 };
@@ -84,7 +83,7 @@ std::string UpdateVersion(int diff) {
 
 class TestServerLauncher : public ServerLauncherInterface {
  public:
-  explicit TestServerLauncher(IPCClientFactoryMock *factory)
+  explicit TestServerLauncher(IPCClientFactoryMock* factory)
       : factory_(factory),
         start_server_result_(false),
         start_server_called_(false),
@@ -96,7 +95,7 @@ class TestServerLauncher : public ServerLauncherInterface {
   virtual void Wait() {}
   virtual void Error() {}
 
-  bool StartServer(ClientInterface *client) override {
+  bool StartServer(ClientInterface* client) override {
     if (!response_.empty()) {
       factory_->SetMockResponse(response_);
     }
@@ -138,9 +137,7 @@ class TestServerLauncher : public ServerLauncherInterface {
     force_terminate_server_called_ = force_terminate_server_called;
   }
 
-  void set_server_program(const absl::string_view server_path) override {}
-
-  zstring_view server_program() const override {
+  std::string server_program() const override {
     return placeholder_server_program_path_;
   }
 
@@ -158,7 +155,7 @@ class TestServerLauncher : public ServerLauncherInterface {
     server_protocol_version_ = server_protocol_version;
   }
 
-  void set_mock_after_start_server(const commands::Output &mock_output) {
+  void set_mock_after_start_server(const commands::Output& mock_output) {
     mock_output.SerializeToString(&response_);
   }
 
@@ -168,7 +165,7 @@ class TestServerLauncher : public ServerLauncherInterface {
 
  private:
   const std::string placeholder_server_program_path_;
-  IPCClientFactoryMock *factory_;
+  IPCClientFactoryMock* factory_;
   bool start_server_result_;
   bool start_server_called_;
   bool force_terminate_server_result_;
@@ -182,8 +179,8 @@ class TestServerLauncher : public ServerLauncherInterface {
 class ClientTest : public testing::TestWithTempUserProfile {
  protected:
   ClientTest() : version_diff_(0) {}
-  ClientTest(const ClientTest &) = delete;
-  ClientTest &operator=(const ClientTest &) = delete;
+  ClientTest(const ClientTest&) = delete;
+  ClientTest& operator=(const ClientTest&) = delete;
 
   void SetUp() override {
     client_factory_ = std::make_unique<IPCClientFactoryMock>();
@@ -201,13 +198,13 @@ class ClientTest : public testing::TestWithTempUserProfile {
     client_factory_.reset();
   }
 
-  void SetMockOutput(const commands::Output &mock_output) {
+  void SetMockOutput(const commands::Output& mock_output) {
     std::string response;
     mock_output.SerializeToString(&response);
     client_factory_->SetMockResponse(response);
   }
 
-  void GetGeneratedInput(commands::Input *input) {
+  void GetGeneratedInput(commands::Input* input) {
     input->ParseFromString(client_factory_->GetGeneratedRequest());
     if (input->type() != commands::Input::CREATE_SESSION) {
       ASSERT_TRUE(input->has_id());
@@ -237,7 +234,7 @@ class ClientTest : public testing::TestWithTempUserProfile {
 
   std::unique_ptr<IPCClientFactoryMock> client_factory_;
   std::unique_ptr<Client> client_;
-  TestServerLauncher *server_launcher_;
+  TestServerLauncher* server_launcher_;
   int version_diff_;
 };
 
@@ -901,7 +898,7 @@ TEST_F(ClientTest, NoInitRequestForSvsJapaneseTest) {
 
 class SessionPlaybackTestServerLauncher : public ServerLauncherInterface {
  public:
-  explicit SessionPlaybackTestServerLauncher(IPCClientFactoryMock *factory)
+  explicit SessionPlaybackTestServerLauncher(IPCClientFactoryMock* factory)
       : factory_(factory),
         start_server_result_(false),
         start_server_called_(false),
@@ -913,7 +910,7 @@ class SessionPlaybackTestServerLauncher : public ServerLauncherInterface {
   virtual void Wait() {}
   virtual void Error() {}
 
-  bool StartServer(ClientInterface *client) override {
+  bool StartServer(ClientInterface* client) override {
     if (!response_.empty()) {
       factory_->SetMockResponse(response_);
     }
@@ -934,18 +931,16 @@ class SessionPlaybackTestServerLauncher : public ServerLauncherInterface {
 
   void OnFatal(ServerLauncherInterface::ServerErrorType type) override {}
 
-  void set_server_program(const absl::string_view server_path) override {}
-
   void set_suppress_error_dialog(bool suppress) override {}
 
   void set_start_server_result(const bool result) {
     start_server_result_ = result;
   }
 
-  zstring_view server_program() const override { return ""; }
+  std::string server_program() const override { return ""; }
 
  private:
-  IPCClientFactoryMock *factory_;
+  IPCClientFactoryMock* factory_;
   bool start_server_result_;
   bool start_server_called_;
   bool force_terminate_server_result_;
@@ -989,7 +984,7 @@ class SessionPlaybackTest : public ::testing::Test {
     return client_->EnsureConnection();
   }
 
-  void SetMockOutput(const commands::Output &mock_output) {
+  void SetMockOutput(const commands::Output& mock_output) {
     std::string response;
     mock_output.SerializeToString(&response);
     ipc_client_factory_->SetMockResponse(response);
@@ -1000,7 +995,7 @@ class SessionPlaybackTest : public ::testing::Test {
   std::unique_ptr<IPCClientFactoryMock> ipc_client_factory_;
   std::unique_ptr<IPCClientInterface> ipc_client_;
   std::unique_ptr<Client> client_;
-  SessionPlaybackTestServerLauncher *server_launcher_;
+  SessionPlaybackTestServerLauncher* server_launcher_;
 };
 
 // b/2797557

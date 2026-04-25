@@ -60,7 +60,7 @@ class DictionaryPredictor : public PredictorInterface {
   // Initializes a predictor with given references to submodules. Note that
   // pointers are not owned by the class and to be deleted by the caller.
   DictionaryPredictor(const engine::Modules& modules,
-                      std::unique_ptr<const RealtimeDecoder> decoder);
+                      const RealtimeDecoder& decoder);
 
   DictionaryPredictor(const DictionaryPredictor&) = delete;
   DictionaryPredictor& operator=(const DictionaryPredictor&) = delete;
@@ -83,7 +83,7 @@ class DictionaryPredictor : public PredictorInterface {
   DictionaryPredictor(
       const engine::Modules& modules,
       std::unique_ptr<const DictionaryPredictionAggregatorInterface> aggregator,
-      std::unique_ptr<const RealtimeDecoder> decoder);
+      const RealtimeDecoder& decoder);
 
   std::vector<Result> RerankAndFilterResults(const ConversionRequest& request,
                                              std::vector<Result> result) const;
@@ -155,10 +155,9 @@ class DictionaryPredictor : public PredictorInterface {
   // Returns the cost offset for SINGLE_KANJI results.
   // Aggregated SINGLE_KANJI results does not have LM based wcost(word cost),
   // so we want to add the offset based on the other entries.
-  int CalculateSingleKanjiCostOffset(
-      const ConversionRequest& request, uint16_t rid,
-      absl::Span<const Result> results,
-      absl::flat_hash_map<PrefixPenaltyKey, int>* cache) const;
+  int CalculateSingleKanjiCostOffset(const ConversionRequest& request,
+                                     uint16_t rid,
+                                     absl::Span<const Result> results) const;
 
   // Returns true if the suggestion is classified
   // as "aggressive".
@@ -166,9 +165,8 @@ class DictionaryPredictor : public PredictorInterface {
                                      bool is_suggestion,
                                      size_t total_candidates_size);
 
-  int CalculatePrefixPenalty(
-      const ConversionRequest& request, const Result& result,
-      absl::flat_hash_map<PrefixPenaltyKey, int>* cache) const;
+  int CalculatePrefixPenalty(const ConversionRequest& request,
+                             const Result& result) const;
 
   std::vector<Result> AggregateTypingCorrectedResultsForMixedConversion(
       const ConversionRequest& request) const;
@@ -198,7 +196,7 @@ class DictionaryPredictor : public PredictorInterface {
   mutable AtomicSharedPtr<Result> prev_top_result_;
   mutable std::atomic<int32_t> prev_top_key_length_ = 0;
 
-  std::unique_ptr<const RealtimeDecoder> decoder_;
+  const RealtimeDecoder& decoder_;
   const Connector& connector_;
   const Segmenter& segmenter_;
   const SuggestionFilter& suggestion_filter_;

@@ -446,7 +446,7 @@ def mozc_dataset(
             ],
         visibility = ["//tools:__subpackages__"],
         deps = [
-            "//base:init_mozc_buildtool",
+            "//base:init_mozc",
             "//converter:gen_segmenter_bitarray",
             "//:macro",
             "@com_google_absl//absl/flags:flag",
@@ -679,7 +679,7 @@ def mozc_dataset(
 
     native.genrule(
         name = name + "@version",
-        srcs = ["//data/version:mozc_version_template.bzl"],
+        srcs = ["//:version.bzl"],
         outs = ["version.data"],
         cmd = (
             "$(location //data_manager:gen_data_version) " +

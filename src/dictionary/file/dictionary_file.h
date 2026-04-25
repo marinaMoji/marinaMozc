@@ -33,13 +33,14 @@
 #ifndef MOZC_DICTIONARY_FILE_DICTIONARY_FILE_H_
 #define MOZC_DICTIONARY_FILE_DICTIONARY_FILE_H_
 
+#include <optional>
 #include <string>
 #include <vector>
 
 #include "absl/status/status.h"
 #include "absl/strings/string_view.h"
 #include "base/mmap.h"
-#include "dictionary/file/codec_interface.h"
+#include "dictionary/file/codec.h"
 
 namespace mozc {
 namespace dictionary {
@@ -48,26 +49,27 @@ struct DictionaryFileSection;
 
 class DictionaryFile final {
  public:
-  explicit DictionaryFile(const DictionaryFileCodecInterface *file_codec);
+  DictionaryFile() = delete;
+  explicit DictionaryFile(const DictionaryFileCodec& file_codec);
 
-  DictionaryFile(const DictionaryFile &) = delete;
-  DictionaryFile &operator=(const DictionaryFile &) = delete;
+  DictionaryFile(const DictionaryFile&) = delete;
+  DictionaryFile& operator=(const DictionaryFile&) = delete;
 
   ~DictionaryFile() = default;
 
   // Opens from a file.
-  absl::Status OpenFromFile(const std::string &file);
+  absl::Status OpenFromFile(absl::string_view file);
 
   // Opens from a memory block.
-  absl::Status OpenFromImage(const char *image, int len);
+  absl::Status OpenFromImage(absl::string_view image);
 
-  // Gets a pointer to the section having |section_name|. Image size is set to
-  // |len|. Returns nullptr when not found.
-  const char *GetSection(absl::string_view section_name, int *len) const;
+  // Gets a data image of the section having |section_name|.
+  // Returns std::nullopt when not found.
+  std::optional<absl::string_view> GetSection(
+      absl::string_view section_name) const;
 
  private:
-  // DictionaryFile does not take the ownership of |file_codec_|.
-  const DictionaryFileCodecInterface *file_codec_;
+  const DictionaryFileCodec& file_codec_;
   Mmap mapping_;
   std::vector<DictionaryFileSection> sections_;
 };

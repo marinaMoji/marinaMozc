@@ -61,7 +61,7 @@ constexpr GUID GUID_IMJPTIP = {
     0x4e90,
     {0xaa, 0xfa, 0x4d, 0xb1, 0x12, 0xf9, 0xac, 0x76}};
 
-std::wstring GUIDToString(const GUID &guid) {
+std::wstring GUIDToString(const GUID& guid) {
   wchar_t buffer[256];
   const int character_length_with_null =
       ::StringFromGUID2(guid, buffer, std::size(buffer));
@@ -87,8 +87,7 @@ std::wstring LANGIDToString(LANGID langid) {
 bool UninstallHelper::RestoreUserIMEEnvironmentMain() {
   const UINT num_element =
       ::EnumEnabledLayoutOrTip(nullptr, nullptr, nullptr, nullptr, 0);
-  std::unique_ptr<LAYOUTORTIPPROFILE[]> buffer(
-      new LAYOUTORTIPPROFILE[num_element]);
+  auto buffer = std::make_unique<LAYOUTORTIPPROFILE[]>(num_element);
   const UINT num_copied = ::EnumEnabledLayoutOrTip(nullptr, nullptr, nullptr,
                                                    buffer.get(), num_element);
 
@@ -101,7 +100,7 @@ bool UninstallHelper::RestoreUserIMEEnvironmentMain() {
   size_t other_keyboard_index = 0;
 
   for (size_t i = 0; i < num_copied; ++i) {
-    const LAYOUTORTIPPROFILE &src = buffer[i];
+    const LAYOUTORTIPPROFILE& src = buffer[i];
     if (::IsEqualCLSID(src.clsid, TsfProfile::GetTextServiceGuid()) &&
         ::IsEqualGUID(src.guidProfile, TsfProfile::GetProfileGuid())) {
       mozc_found = true;
@@ -127,7 +126,7 @@ bool UninstallHelper::RestoreUserIMEEnvironmentMain() {
     if (msime_found || other_keyboard_found) {
       // Prefer MS-IME over other enabled items.
       const size_t index = msime_found ? msime_index : other_keyboard_index;
-      const LAYOUTORTIPPROFILE &src = buffer[index];
+      const LAYOUTORTIPPROFILE& src = buffer[index];
       const auto desc = ::mozc::win32::StrCatW(
           L"0x", LANGIDToString(src.langid), L":", GUIDToString(src.clsid),
           GUIDToString(src.guidProfile));
@@ -137,7 +136,7 @@ bool UninstallHelper::RestoreUserIMEEnvironmentMain() {
 
   // Then remove Mozc from the enabled list.
   if (mozc_found) {
-    const LAYOUTORTIPPROFILE &src = buffer[mozc_index];
+    const LAYOUTORTIPPROFILE& src = buffer[mozc_index];
     const auto desc = ::mozc::win32::StrCatW(L"0x", LANGIDToString(src.langid),
                                              L":", GUIDToString(src.clsid),
                                              GUIDToString(src.guidProfile));

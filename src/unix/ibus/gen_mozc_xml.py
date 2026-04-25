@@ -79,9 +79,10 @@ def GetEnginesXml(engine_common, engines):
 
   Args:
     engine_common: A dictionary from a property name to a property value that
-        are commonly used in all engines. For example, {'language': 'ja'}.
+      are commonly used in all engines. For example, {'language': 'ja'}.
     engines: A dictionary from a property name to a list of property values of
-        engines. For example, {'name': ['mozc-jp', 'mozc', 'mozc-dv']}.
+      engines. For example, {'name': ['mozc-jp', 'mozc', 'mozc-dv']}.
+
   Returns:
     output string in XML.
   """
@@ -103,6 +104,7 @@ def GetIbusConfigTextProto(engines, branding=None):
   Args:
     engines: A list of engine dicts. For example, [{'name': 'mozc-jp', ...}].
     branding: Optional branding string ('marinaMozc', etc.) for defaults.
+
   Returns:
     output string in TextProto.
   """
@@ -122,10 +124,14 @@ def GetIbusConfigTextProto(engines, branding=None):
   output.append('  use_ibus_candidate_window : True')
   output.append("  # Set 'False' to use IBus' candidate window (legacy; use_ibus_candidate_window overrides).")
   output.append('  enabled : True')
-  output.append("  # For Wayland sessions, 'mozc_renderer' will be used if and "
-                "only if any value")
-  output.append('  # set in this field (e.g. "GNOME", "KDE") is found in '
-                '$XDG_CURRENT_DESKTOP.')
+  output.append(
+      "  # For Wayland sessions, 'mozc_renderer' will be used if and "
+      'only if any value'
+  )
+  output.append(
+      '  # set in this field (e.g. "GNOME", "KDE") is found in '
+      '$XDG_CURRENT_DESKTOP.'
+  )
   output.append(f'  # {XDG_CURRENT_DESKTOP_URL}')
   output.append('  compatible_wayland_desktop_names : ["GNOME"]')
   output.append('}')
@@ -137,7 +143,7 @@ def OutputXml(component, ibus_mozc_path):
 
   Args:
     component: A dictionary from a property name to a property value of the
-        ibus-mozc component. For example, {'name': 'com.google.IBus.Mozc'}.
+      ibus-mozc component. For example, {'name': 'com.google.IBus.Mozc'}.
     ibus_mozc_path: A path to ibus-engine-mozc.
   """
   print('<component>')
@@ -146,14 +152,14 @@ def OutputXml(component, ibus_mozc_path):
   print('  <engines exec="%s --xml" />' % ibus_mozc_path)
   print('</component>')
 
-  print('''
+  print("""
 <!-- Settings of <engines> and <layout> are stored in ibus_config.textproto -->
 <!-- under the user configuration directory, which is either of: -->
 <!-- * $XDG_CONFIG_HOME/mozc/ibus_config.textproto -->
 <!-- * $HOME/.config/mozc/ibus_config.textproto -->
 <!-- * $HOME/.mozc/ibus_config.textproto -->
 <!-- `ibus write-cache; ibus restart` might be necessary to apply changes. -->
-''')
+""")
 
 
 def OutputCppVariable(prefix, key, value):
@@ -165,11 +171,11 @@ def OutputCpp(component, engine_common, engines, branding=None):
 
   Args:
     component: A dictionary from a property name to a property value of the
-        ibus-mozc component. For example, {'name': 'com.google.IBus.Mozc'}.
+      ibus-mozc component. For example, {'name': 'com.google.IBus.Mozc'}.
     engine_common: A dictionary from a property name to a property value that
-        are commonly used in all engines. For example, {'language': 'ja'}.
+      are commonly used in all engines. For example, {'language': 'ja'}.
     engines: A dictionary from a property name to a list of property values of
-        engines. For example, [{'name': 'mozc-jp',...}, {'name': 'mozc'},...]
+      engines. For example, [{'name': 'mozc-jp',...}, {'name': 'mozc'},...]
     branding: Optional branding string for default config (e.g. 'marinaMozc').
   """
   guard_name = 'MOZC_UNIX_IBUS_MAIN_H_'
@@ -191,20 +197,38 @@ def OutputCpp(component, engine_common, engines, branding=None):
 def main():
   """The main function."""
   parser = optparse.OptionParser(usage='Usage: %prog [options]')
-  parser.add_option('--output_cpp', action='store_true',
-                    dest='output_cpp', default=False,
-                    help='If specified, output a C++ header. Otherwise, output '
-                    'XML.')
-  parser.add_option('--branding', dest='branding', default=None,
-                    help='Branding: Mozc, marinaMozc, or GoogleJapaneseInput.')
-  parser.add_option('--ibus_mozc_path', dest='ibus_mozc_path', default='',
-                    help='The absolute path of ibus_mozc executable.')
-  parser.add_option('--ibus_mozc_icon_path', dest='ibus_mozc_icon_path',
-                    default='', help='The absolute path of ibus_mozc icon.')
-  parser.add_option('--server_dir', dest='server_dir', default='',
-                    help='The absolute directory path to be installed the '
-                    'server executable.')
-  (options, unused_args) = parser.parse_args()
+  parser.add_option(
+      '--output_cpp',
+      action='store_true',
+      dest='output_cpp',
+      default=False,
+      help='If specified, output a C++ header. Otherwise, output XML.',
+  )
+  parser.add_option(
+      '--branding',
+      dest='branding',
+      default=None,
+      help='Branding: Mozc, marinaMozc, or GoogleJapaneseInput.',
+  )
+  parser.add_option(
+      '--ibus_mozc_path',
+      dest='ibus_mozc_path',
+      default='',
+      help='The absolute path of ibus_mozc executable.',
+  )
+  parser.add_option(
+      '--ibus_mozc_icon_path',
+      dest='ibus_mozc_icon_path',
+      default='',
+      help='The absolute path of ibus_mozc icon.',
+  )
+  parser.add_option(
+      '--server_dir',
+      dest='server_dir',
+      default='',
+      help='The absolute directory path to be installed the server executable.',
+  )
+  options, unused_args = parser.parse_args()
 
   product_name = PRODUCT_NAMES[options.branding]
   ibus_mozc_path = options.ibus_mozc_path
@@ -252,50 +276,57 @@ def main():
   # input method list (Japonais (marinaMozc)). Stock Mozc may show three
   # (mozc-jp, mozc-on, mozc-off) on some setups.
   if options.branding == 'marinaMozc':
-    engines = [{
-        'name': 'mozc-jp',
-        'longname': product_name,
-        'layout': 'default',
-        'layout_variant': '',
-        'layout_option': '',
-        'rank': 80,
-        'symbol': 'あ',
-        'composition_mode': 'HIRAGANA',
-    }]
+    engines = [
+        {
+            'name': 'mozc-jp',
+            'longname': product_name,
+            'layout': 'default',
+            'layout_variant': '',
+            'layout_option': '',
+            'rank': 80,
+            'symbol': 'あ',
+            'composition_mode': 'HIRAGANA',
+        },
+    ]
   else:
-    engines = [{
-        'name': 'mozc-jp',
-        'longname': product_name,
-        'layout': 'default',
-        'layout_variant': '',
-        'layout_option': '',
-        'rank': 80,
-        'symbol': 'あ',
-    }, {
-        'name': 'mozc-on',
-        'longname': product_name + u':あ',
-        'layout': 'default',
-        'layout_variant': '',
-        'layout_option': '',
-        'rank': 99,
-        'symbol': 'あ',
-        'composition_mode': 'HIRAGANA',
-    }, {
-        'name': 'mozc-off',
-        'longname': product_name + ':A_',
-        'layout': 'default',
-        'layout_variant': '',
-        'layout_option': '',
-        'rank': 99,
-        'symbol': 'A',
-        'composition_mode': 'DIRECT',
-    }]
+    engines = [
+      {
+          'name': 'mozc-jp',
+          'longname': product_name,
+          'layout': 'default',
+          'layout_variant': '',
+          'layout_option': '',
+          'rank': 80,
+          'symbol': 'あ',
+      },
+      {
+          'name': 'mozc-on',
+          'longname': product_name + ':あ',
+          'layout': 'default',
+          'layout_variant': '',
+          'layout_option': '',
+          'rank': 99,
+          'symbol': 'あ',
+          'composition_mode': 'HIRAGANA',
+      },
+      {
+          'name': 'mozc-off',
+          'longname': product_name + ':A_',
+          'layout': 'default',
+          'layout_variant': '',
+          'layout_option': '',
+          'rank': 99,
+          'symbol': 'A',
+          'composition_mode': 'DIRECT',
+      },
+    ]
 
   if options.output_cpp:
     OutputCpp(component, engine_common, engines, options.branding)
   else:
     OutputXml(component, ibus_mozc_path)
   return 0
+
 
 if __name__ == '__main__':
   sys.exit(main())

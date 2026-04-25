@@ -98,10 +98,12 @@ void MaybeFillFallbackPos(absl::Span<Result> results) {
 Predictor::Predictor(const engine::Modules& modules,
                      const ConverterInterface& converter,
                      const ImmutableConverterInterface& immutable_converter)
-    : dictionary_predictor_(std::make_unique<DictionaryPredictor>(
-          modules,
-          std::make_unique<RealtimeDecoder>(immutable_converter, converter))),
-      user_history_predictor_(std::make_unique<UserHistoryPredictor>(modules)),
+    : realtime_decoder_(
+          std::make_unique<RealtimeDecoder>(immutable_converter, converter)),
+      dictionary_predictor_(
+          std::make_unique<DictionaryPredictor>(modules, *realtime_decoder_)),
+      user_history_predictor_(
+          std::make_unique<UserHistoryPredictor>(modules, *realtime_decoder_)),
       pos_matcher_(modules.GetPosMatcher()) {
   DCHECK(dictionary_predictor_);
   DCHECK(user_history_predictor_);
@@ -337,6 +339,22 @@ bool Predictor::PromoteTopDictionaryResult(
          params.candidate_mixing_min_post_correction_prob();
 }
 
+// static
+void Predictor::DemoteWeakUserHistory(absl::Span<Result> results) {
+  auto is_weak = [](const Result& result) {
+    return result.types & prediction::WEAK_USER_HISTORY_PREDICTION;
+  };
+
+  if (results.empty() || !is_weak(results.front())) {
+    return;
+  }
+
+  if (auto first_no_weak = absl::c_find_if_not(results, is_weak);
+      first_no_weak != results.end()) {
+    std::rotate(results.begin(), first_no_weak, std::next(first_no_weak));
+  }
+}
+
 std::vector<Result> Predictor::MixCandidates(
     const ConversionRequest& request, std::vector<Result> user_history_results,
     std::vector<Result> dictionary_results) const {
@@ -369,6 +387,8 @@ std::vector<Result> Predictor::MixCandidates(
     insert_results(user_history_results);
     insert_results(dictionary_results);
   }
+
+  DemoteWeakUserHistory(absl::MakeSpan(results));
 
   return results;
 }

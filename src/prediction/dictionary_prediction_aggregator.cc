@@ -154,7 +154,7 @@ std::optional<std::string> GetNumberHistory(const ConversionRequest& request) {
 }
 
 bool IsEmailPrefix(absl::string_view str) {
-  return str.ends_with("@") && mozc::Util::IsAscii(str);
+  return str.ends_with('@') && mozc::Util::IsAscii(str);
 }
 
 class PredictiveLookupCallback : public DictionaryInterface::Callback {
@@ -328,135 +328,23 @@ class PredictiveBigramLookupCallback : public PredictiveLookupCallback {
   absl::string_view history_value_;
 };
 
-class PrefixLookupCallback : public DictionaryInterface::Callback {
- public:
-  PrefixLookupCallback(size_t limit, int kanji_number_id, int unknown_id,
-                       int min_value_chars_len, int request_key_len,
-                       std::vector<Result>* results)
-      : limit_(limit),
-        kanji_number_id_(kanji_number_id),
-        unknown_id_(unknown_id),
-        min_value_chars_len_(min_value_chars_len),
-        request_key_len_(request_key_len),
-        results_(results) {}
-
-  PrefixLookupCallback(const PrefixLookupCallback&) = delete;
-  PrefixLookupCallback& operator=(const PrefixLookupCallback&) = delete;
-
-  ResultType OnToken(absl::string_view key, absl::string_view actual_key,
-                     const Token& token) override {
-    if ((token.attributes & Token::USER_DICTIONARY) != 0 &&
-        token.lid == unknown_id_) {
-      // No suggest-only words as prefix candidates
-      return TRAVERSE_CONTINUE;
-    }
-    // Avoid noisy script type nodes.
-    if (token.lid == kanji_number_id_ && token.rid == kanji_number_id_) {
-      // Kanji number entry can be looked up with the special reading and will
-      // be expanded for the number variants, so we want to suppress them here.
-      // For example, for the input "ろっぽんぎ", "六" can be looked up for
-      // the prefix reading "ろ" or "ろっ", and then be expanded with "6", "Ⅵ",
-      // etc.
-      return TRAVERSE_CONTINUE;
-    }
-    const Util::ScriptType script_type = Util::GetScriptType(token.value);
-    if (script_type == Util::NUMBER || script_type == Util::ALPHABET ||
-        script_type == Util::EMOJI) {
-      return TRAVERSE_CONTINUE;
-    }
-    if (Util::CharsLen(token.value) < min_value_chars_len_) {
-      return TRAVERSE_CONTINUE;
-    }
-    Result result;
-    result.InitializeByTokenAndTypes(token, PREFIX);
-    if (key != actual_key) {
-      result.candidate_attributes |= converter::Attribute::TYPING_CORRECTION;
-    }
-    const int key_len = Util::CharsLen(key);
-    if (key_len < request_key_len_) {
-      result.candidate_attributes |=
-          converter::Attribute::PARTIALLY_KEY_CONSUMED;
-      result.consumed_key_size = key_len;
-    }
-    results_->emplace_back(std::move(result));
-    return (results_->size() < limit_) ? TRAVERSE_CONTINUE : TRAVERSE_DONE;
-  }
-
- private:
-  const size_t limit_;
-  const int kanji_number_id_;
-  const int unknown_id_;
-  const int min_value_chars_len_;
-  const int request_key_len_;
-  std::vector<Result>* results_ = nullptr;
-};
-
-class HandwritingLookupCallback : public DictionaryInterface::Callback {
- public:
-  HandwritingLookupCallback(size_t limit, int penalty,
-                            std::vector<std::string> constraints,
-                            std::vector<Result>* results)
-      : limit_(limit),
-        penalty_(penalty),
-        constraints_(std::move(constraints)),
-        results_(results) {}
-
-  HandwritingLookupCallback(const HandwritingLookupCallback&) = delete;
-  HandwritingLookupCallback& operator=(const HandwritingLookupCallback&) =
-      delete;
-
-  ResultType OnToken(absl::string_view key, absl::string_view actual_key,
-                     const Token& token) override {
-    size_t next_pos = 0;
-    for (absl::string_view constraint : constraints_) {
-      const size_t pos = token.value.find(constraint, next_pos);
-      if (pos == std::string::npos) {
-        return TRAVERSE_CONTINUE;
-      }
-      next_pos = pos + 1;
-    }
-
-    Result result;
-    result.InitializeByTokenAndTypes(token, UNIGRAM);
-    result.wcost += penalty_;
-    results_->emplace_back(std::move(result));
-    return (results_->size() < limit_) ? TRAVERSE_CONTINUE : TRAVERSE_DONE;
-  }
-
- private:
-  const size_t limit_;  // The maximum number of results token size.
-  const int penalty_;   // Cost penalty for result tokens.
-  const std::vector<std::string> constraints_;
-  std::vector<Result>* results_ = nullptr;
-};
-
-class FindValueCallback : public DictionaryInterface::Callback {
- public:
-  FindValueCallback(const FindValueCallback&) = delete;
-  FindValueCallback& operator=(const FindValueCallback&) = delete;
-  explicit FindValueCallback(absl::string_view target_value)
-      : target_value_(target_value), found_(false) {}
-
-  ResultType OnToken(absl::string_view,  // key
-                     absl::string_view,  // actual_key
-                     const Token& token) override {
-    if (token.value != target_value_) {
-      return TRAVERSE_CONTINUE;
-    }
-    found_ = true;
-    token_ = token;
+std::optional<Token> FindKeyAndValue(const DictionaryInterface& dic,
+                                     const ConversionRequest& request,
+                                     absl::string_view key,
+                                     absl::string_view value) {
+  std::optional<Token> result_token;
+  dictionary::InlineCallback cb;
+  cb.OnToken([&](absl::string_view,  // key
+                 absl::string_view,  // actual_key
+                 const Token& token) {
+    using enum DictionaryInterface::Callback::ResultType;
+    if (token.value != value) return TRAVERSE_CONTINUE;
+    result_token = token;
     return TRAVERSE_DONE;
-  }
-
-  bool found() const { return found_; }
-
-  const Token& token() const { return token_; }
-
- private:
-  absl::string_view target_value_;
-  bool found_;
-  Token token_;
-};
+  });
+  dic.LookupPrefix(key, request, &cb);
+  return result_token;
+}
 
 }  // namespace
 
@@ -539,9 +427,9 @@ DictionaryPredictionAggregator::AggregateResultsForMixedConversion(
   }
 
   // Always aggregate realtime results when mixed conversion mode.
-  AggregateRealtime(request, GetRealtimeCandidateMaxSize(request),
-                    request.use_actual_converter_for_realtime_conversion(),
-                    &results);
+  AggregateRealtime(
+      request, GetRealtimeCandidateMaxSize(request),
+      request.options().use_actual_converter_for_realtime_conversion, &results);
 
   // In partial suggestion or prediction, only realtime candidates are used.
   if (request.request_type() == ConversionRequest::PARTIAL_SUGGESTION ||
@@ -599,9 +487,10 @@ std::vector<Result> DictionaryPredictionAggregator::AggregateResultsForDesktop(
   }
 
   if (ShouldAggregateRealTimeConversionResults(request)) {
-    AggregateRealtime(request, GetRealtimeCandidateMaxSize(request),
-                      request.use_actual_converter_for_realtime_conversion(),
-                      &results);
+    AggregateRealtime(
+        request, GetRealtimeCandidateMaxSize(request),
+        request.options().use_actual_converter_for_realtime_conversion,
+        &results);
   }
 
   // Desktop mode never sets PARTIAL mode, so we may use DCHECK after the
@@ -910,12 +799,30 @@ void DictionaryPredictionAggregator::AggregateUnigramForHandwriting(
     if (query_info.has_value()) {
       ++processed_count;
 
-      // Populate |results| with the look up result.
-      HandwritingLookupCallback callback(
-          adjuster.cutoff_threshold(),
-          handwriting_cost_offset + recognition_cost, query_info->constraints,
-          results);
-      dictionary_.LookupExact(query_info->query, request, &callback);
+      dictionary::InlineCallback cb;
+      cb.OnToken([&](absl::string_view key, absl::string_view actual_key,
+                     const Token& token) {
+        using enum DictionaryInterface::Callback::ResultType;
+        const int penalty = handwriting_cost_offset + recognition_cost;
+        size_t next_pos = 0;
+        for (absl::string_view constraint : query_info->constraints) {
+          const size_t pos = token.value.find(constraint, next_pos);
+          if (pos == std::string::npos) {
+            return TRAVERSE_CONTINUE;
+          }
+          next_pos = pos + 1;
+        }
+        Result result;
+        result.InitializeByTokenAndTypes(token, UNIGRAM);
+        result.wcost += penalty;
+        results->emplace_back(std::move(result));
+        return (results->size() < adjuster.cutoff_threshold())
+                   ? TRAVERSE_CONTINUE
+                   : TRAVERSE_DONE;
+      });
+
+      dictionary_.LookupExact(query_info->query, request, &cb);
+
       // Rewrite key with the look-up query.
       asis_result.key = query_info->query;
     }
@@ -957,13 +864,12 @@ void DictionaryPredictionAggregator::AggregateBigram(
   }
 
   // Check that history_key/history_value are in the dictionary.
-  FindValueCallback find_history_callback(history_value);
-  dictionary_.LookupPrefix(history_key, request, &find_history_callback);
-
-  // History value is not found in the dictionary.
-  // User may create this the history candidate from T13N or segment
-  // expand/shrinkg operations.
-  if (!find_history_callback.found()) {
+  std::optional<Token> find_history_token =
+      FindKeyAndValue(dictionary_, request, history_key, history_value);
+  if (!find_history_token.has_value()) {
+    // History value is not found in the dictionary.
+    // User may create this the history candidate from T13N or segment
+    // expand/shrinkg operations.
     return;
   }
 
@@ -978,8 +884,8 @@ void DictionaryPredictionAggregator::AggregateBigram(
   const Util::ScriptType last_history_ctype = Util::GetScriptType(
       Util::Utf8SubString(history_value, history_value_size - 1, 1));
   for (Result& result : adjuster.GetAddedResults()) {
-    CheckBigramResult(find_history_callback.token(), history_ctype,
-                      last_history_ctype, request, &result);
+    CheckBigramResult(*find_history_token, history_ctype, last_history_ctype,
+                      request, &result);
   }
 }
 
@@ -1053,10 +959,50 @@ void DictionaryPredictionAggregator::AggregatePrefix(
       Util::Utf8SubString(request_key, 0, request_key_len - 1);
 
   constexpr int kMinValueCharsLen = 2;
-  PrefixLookupCallback callback(
-      GetCandidateCutoffThreshold(request.request_type()), kanji_number_id_,
-      unknown_id_, kMinValueCharsLen, request_key_len, results);
-  dictionary_.LookupPrefix(lookup_key, request, &callback);
+  const int limit = GetCandidateCutoffThreshold(request.request_type());
+
+  dictionary::InlineCallback cb;
+  cb.OnToken([&](absl::string_view key, absl::string_view actual_key,
+                 const Token& token) {
+    using enum DictionaryInterface::Callback::ResultType;
+    if ((token.attributes & Token::USER_DICTIONARY) != 0 &&
+        token.lid == unknown_id_) {
+      // No suggest-only words as prefix candidates
+      return TRAVERSE_CONTINUE;
+    }
+    // Avoid noisy script type nodes.
+    if (token.lid == kanji_number_id_ && token.rid == kanji_number_id_) {
+      // Kanji number entry can be looked up with the special reading and will
+      // be expanded for the number variants, so we want to suppress them here.
+      // For example, for the input "ろっぽんぎ", "六" can be looked up for
+      // the prefix reading "ろ" or "ろっ", and then be expanded with "6", "Ⅵ",
+      // etc.
+      return TRAVERSE_CONTINUE;
+    }
+    const Util::ScriptType script_type = Util::GetScriptType(token.value);
+    if (script_type == Util::NUMBER || script_type == Util::ALPHABET ||
+        script_type == Util::EMOJI) {
+      return TRAVERSE_CONTINUE;
+    }
+    if (Util::CharsLen(token.value) < kMinValueCharsLen) {
+      return TRAVERSE_CONTINUE;
+    }
+    Result result;
+    result.InitializeByTokenAndTypes(token, PREFIX);
+    if (key != actual_key) {
+      result.candidate_attributes |= converter::Attribute::TYPING_CORRECTION;
+    }
+    const int key_len = Util::CharsLen(key);
+    if (key_len < request_key_len) {
+      result.candidate_attributes |=
+          converter::Attribute::PARTIALLY_KEY_CONSUMED;
+      result.consumed_key_size = key_len;
+    }
+    results->emplace_back(std::move(result));
+    return (results->size() < limit) ? TRAVERSE_CONTINUE : TRAVERSE_DONE;
+  });
+
+  dictionary_.LookupPrefix(lookup_key, request, &cb);
 }
 
 void DictionaryPredictionAggregator::AggregateSingleKanji(
@@ -1075,7 +1021,7 @@ void DictionaryPredictionAggregator::GetPredictiveResultsForUnigram(
     PredictionTypes types, size_t lookup_limit,
     std::vector<Result>* results) const {
   const absl::btree_set<std::string> empty_expanded;
-  if (request.use_already_typing_corrected_key()) {
+  if (request.options().use_already_typing_corrected_key) {
     PredictiveLookupCallback callback(types, lookup_limit, request.key().size(),
                                       empty_expanded, zip_code_id_, unknown_id_,
                                       results);
@@ -1117,7 +1063,7 @@ void DictionaryPredictionAggregator::GetPredictiveResultsForBigram(
     std::vector<Result>* results) const {
   absl::btree_set<std::string> expanded;
 
-  if (request.use_already_typing_corrected_key()) {
+  if (request.options().use_already_typing_corrected_key) {
     const std::string request_key = absl::StrCat(history_key, request.key());
     PredictiveBigramLookupCallback callback(
         types, lookup_limit, request_key.size(), expanded, history_key,
@@ -1195,20 +1141,32 @@ void DictionaryPredictionAggregator::GetZeroQueryCandidatesForKey(
     std::vector<Result>* results) const {
   DCHECK(results);
 
-  using ZeroQueryResult = std::pair<std::string, ZeroQueryType>;
-  std::vector<ZeroQueryResult> zero_query_results;
-
-  auto range = dict.equal_range(key);
-  if (range.first == range.second) {
+  absl::Span<const ZeroQueryEntry> entries = dict.equal_range(key);
+  if (entries.empty()) {
     return;
   }
 
   const bool is_key_one_char_and_not_kanji =
       Util::CharsLen(key) == 1 && !Util::ContainsScriptType(key, Util::KANJI);
-  for (; range.first != range.second; ++range.first) {
-    const auto& entry = range.first;
-    if (entry.type() != ZERO_QUERY_EMOJI) {
-      zero_query_results.emplace_back(entry.value(), entry.type());
+
+  int cost = 0;
+  constexpr int kSuffixPenalty = 10;
+
+  auto add_entry = [&](const ZeroQueryEntry& entry) {
+    Result result;
+    result.SetTypesAndTokenAttributes(SUFFIX, Token::NONE);
+    result.key = dict.value(entry);
+    result.value = dict.value(entry);
+    result.wcost = cost;
+    result.lid = lid;
+    result.rid = rid;
+    results->emplace_back(std::move(result));
+    cost += kSuffixPenalty;
+  };
+
+  for (const ZeroQueryEntry& entry : entries) {
+    if (entry.type != ZERO_QUERY_EMOJI) {
+      add_entry(entry);
       continue;
     }
 
@@ -1218,24 +1176,7 @@ void DictionaryPredictionAggregator::GetZeroQueryCandidatesForKey(
       continue;
     }
 
-    zero_query_results.emplace_back(entry.value(), entry.type());
-  }
-
-  int cost = 0;
-  for (const auto& [value, type] : zero_query_results) {
-    // Increment cost to show the candidates in order.
-    constexpr int kSuffixPenalty = 10;
-
-    Result result;
-    result.SetTypesAndTokenAttributes(SUFFIX, Token::NONE);
-    result.key = value;
-    result.value = value;
-    result.wcost = cost;
-    result.lid = lid;
-    result.rid = rid;
-    results->emplace_back(std::move(result));
-
-    cost += kSuffixPenalty;
+    add_entry(entry);
   }
 }
 
@@ -1265,11 +1206,12 @@ size_t DictionaryPredictionAggregator::GetRealtimeCandidateMaxSize(
     return kRealtimeCandidatesSizeForHandwriting;
   }
 
-  const size_t size_limit = request.max_dictionary_prediction_candidates_size();
+  const size_t size_limit =
+      request.options().max_dictionary_prediction_candidates_size;
 
   // Set the initial values to max_size and default_size.
   size_t max_size = size_limit;
-  if (request.create_partial_candidates()) {
+  if (request.options().create_partial_candidates) {
     max_size = 20;
   }
   size_t default_size = 10;
@@ -1437,9 +1379,7 @@ void DictionaryPredictionAggregator::CheckBigramResult(
       return;
     }
   } else {
-    FindValueCallback callback(value);
-    dictionary_.LookupPrefix(key, request, &callback);
-    if (!callback.found()) {
+    if (!FindKeyAndValue(dictionary_, request, key, value)) {
       result->removed = true;
       MOZC_WORD_LOG(*result, "Removed. No prefix found.");
       return;

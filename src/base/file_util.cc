@@ -29,6 +29,7 @@
 
 #include "base/file_util.h"
 
+#include <atomic>
 #include <cerrno>
 #include <cstddef>
 #include <cstdio>
@@ -53,8 +54,7 @@
 #include "base/file_stream.h"
 #include "base/mmap.h"
 #include "base/port.h"
-#include "base/singleton.h"
-#include "base/strings/zstring_view.h"
+#include "base/strings/pfchar.h"
 
 #ifdef _WIN32
 #include <wil/resource.h>
@@ -78,7 +78,7 @@ constexpr char kFileDelimiter = '/';
 
 }  // namespace
 
-// Ad-hoc workadound against macro problem on Windows.
+// Ad-hoc workaround against macro problem on Windows.
 // On Windows, following macros, defined when you include <windows.h>,
 // should be removed here because they affects the method name definition of
 // Util class.
@@ -89,30 +89,17 @@ constexpr char kFileDelimiter = '/';
 
 namespace mozc {
 namespace {
-class FileUtilImpl : public FileUtilInterface {
- public:
-  FileUtilImpl() = default;
-  ~FileUtilImpl() override = default;
 
-  absl::Status CreateDirectory(zstring_view path) const override;
-  absl::Status RemoveDirectory(zstring_view dirname) const override;
-  absl::Status Unlink(zstring_view filename) const override;
-  absl::Status FileExists(zstring_view filename) const override;
-  absl::Status DirectoryExists(zstring_view dirname) const override;
-  absl::Status CopyFile(zstring_view from, zstring_view to) const override;
-  absl::StatusOr<bool> IsEqualFile(zstring_view filename1,
-                                   zstring_view filename2) const override;
-  absl::StatusOr<bool> IsEquivalent(zstring_view filename1,
-                                    zstring_view filename2) const override;
-  absl::Status AtomicRename(zstring_view from, zstring_view to) const override;
-  absl::Status CreateHardLink(zstring_view from, zstring_view to) override;
-  absl::StatusOr<FileTimeStamp> GetModificationTime(
-      zstring_view filename) const override;
-};
-
-using FileUtilSingleton = SingletonMockable<FileUtilInterface, FileUtilImpl>;
+constinit static std::atomic<FileUtilInterface*> g_mock = nullptr;
 
 }  // namespace
+
+// Macro to reduce boilerplate for mock delegation.
+// Each mockable method checks g_mock and delegates if non-null.
+#define MAYBE_INVOKE_MOCK(method, ...)                                    \
+  if (FileUtilInterface* mock = g_mock.load(std::memory_order_acquire)) { \
+    return mock->method(__VA_ARGS__);                                     \
+  }
 
 #ifdef _WIN32
 namespace {
@@ -162,27 +149,28 @@ absl::Status SetFileAttributes(const std::wstring& filename, DWORD attrs) {
 // has some special attribute like read-only. This method tries to strip system,
 // hidden, and read-only attributes from |filename|.
 // This function does nothing if |filename| does not exist.
-absl::Status StripWritePreventingAttributesIfExists(zstring_view filename) {
+absl::Status StripWritePreventingAttributesIfExists(
+    absl::string_view filename) {
   if (absl::Status s = FileUtil::FileExists(filename); absl::IsNotFound(s)) {
     return absl::OkStatus();
   } else if (!s.ok()) {
     return s;
   }
-  const std::wstring wide_filename = win32::Utf8ToWide(filename);
+  const pfstring pf_filename = to_pfstring(filename);
   constexpr DWORD kDropAttributes =
       FILE_ATTRIBUTE_SYSTEM | FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_READONLY;
-  absl::StatusOr<DWORD> attributes = GetFileAttributes(wide_filename);
+  absl::StatusOr<DWORD> attributes = GetFileAttributes(pf_filename);
   if (!attributes.ok()) {
     return std::move(attributes).status();
   }
   if (*attributes & kDropAttributes) {
     const DWORD attrs = *attributes & ~kDropAttributes;
-    if (absl::Status s = SetFileAttributes(wide_filename, attrs); !s.ok()) {
+    if (absl::Status s = SetFileAttributes(pf_filename, attrs); !s.ok()) {
       return absl::Status(
           s.code(),
           absl::StrFormat(
               "Cannot drop the write-preventing file attributes of %s: %s",
-              filename.view(), s.message()));
+              filename, s.message()));
     }
   }
   return absl::OkStatus();
@@ -191,11 +179,11 @@ absl::Status StripWritePreventingAttributesIfExists(zstring_view filename) {
 }  // namespace
 #endif  // _WIN32
 
-absl::Status FileUtil::CreateDirectory(zstring_view path) {
-  return FileUtilSingleton::Get()->CreateDirectory(path);
-}
+absl::Status FileUtil::CreateDirectory(absl::string_view path) {
+  MAYBE_INVOKE_MOCK(CreateDirectory, path);
 
-absl::Status FileUtilImpl::CreateDirectory(zstring_view path) const {
+  const pfstring pf_path = to_pfstring(path);
+
 #if !defined(_WIN32)
   // On Windows, this check is skipped to avoid freeze of the host application.
   // This platform dependent behavior is a temporary solution to avoid
@@ -209,16 +197,15 @@ absl::Status FileUtilImpl::CreateDirectory(zstring_view path) const {
 #endif  // !_WIN32
 
 #if defined(_WIN32)
-  const std::wstring wide = win32::Utf8ToWide(path);
-  if (wide.empty()) {
+  if (pf_path.empty()) {
     return absl::InvalidArgumentError("Failed to convert to wstring");
   }
-  if (!::CreateDirectoryW(wide.c_str(), nullptr)) {
+  if (!::CreateDirectoryW(pf_path.c_str(), nullptr)) {
     return Win32ErrorToStatus(::GetLastError(), "CreateDirectoryW failed");
   }
   return absl::OkStatus();
 #else   // !_WIN32
-  if (::mkdir(path.c_str(), 0700) != 0) {
+  if (::mkdir(pf_path.c_str(), 0700) != 0) {
     const int err = errno;
     return absl::ErrnoToStatus(err, "mkdir failed");
   }
@@ -226,22 +213,21 @@ absl::Status FileUtilImpl::CreateDirectory(zstring_view path) const {
 #endif  // _WIN32
 }
 
-absl::Status FileUtil::RemoveDirectory(zstring_view dirname) {
-  return FileUtilSingleton::Get()->RemoveDirectory(dirname);
-}
+absl::Status FileUtil::RemoveDirectory(absl::string_view dirname) {
+  MAYBE_INVOKE_MOCK(RemoveDirectory, dirname);
 
-absl::Status FileUtilImpl::RemoveDirectory(zstring_view dirname) const {
+  const pfstring pf_dirname = to_pfstring(dirname);
+
 #ifdef _WIN32
-  const std::wstring wide = win32::Utf8ToWide(dirname);
-  if (wide.empty()) {
+  if (pf_dirname.empty()) {
     return absl::InvalidArgumentError("Failed to convert to wstring");
   }
-  if (!::RemoveDirectoryW(wide.c_str())) {
+  if (!::RemoveDirectoryW(pf_dirname.c_str())) {
     return Win32ErrorToStatus(::GetLastError(), "RemoveDirectoryW failed");
   }
   return absl::OkStatus();
 #else   // !_WIN32
-  if (::rmdir(dirname.c_str()) != 0) {
+  if (::rmdir(pf_dirname.c_str()) != 0) {
     const int err = errno;
     return absl::ErrnoToStatus(err, "rmdir failed");
   }
@@ -249,7 +235,7 @@ absl::Status FileUtilImpl::RemoveDirectory(zstring_view dirname) const {
 #endif  // _WIN32
 }
 
-absl::Status FileUtil::RemoveDirectoryIfExists(zstring_view dirname) {
+absl::Status FileUtil::RemoveDirectoryIfExists(absl::string_view dirname) {
   absl::Status s = FileExists(dirname);
   if (s.ok()) {
     return RemoveDirectory(dirname);
@@ -260,28 +246,27 @@ absl::Status FileUtil::RemoveDirectoryIfExists(zstring_view dirname) {
   return s;
 }
 
-absl::Status FileUtil::Unlink(zstring_view filename) {
-  return FileUtilSingleton::Get()->Unlink(filename);
-}
+absl::Status FileUtil::Unlink(absl::string_view filename) {
+  MAYBE_INVOKE_MOCK(Unlink, filename);
 
-absl::Status FileUtilImpl::Unlink(zstring_view filename) const {
+  const pfstring pf_filename = to_pfstring(filename);
+
 #ifdef _WIN32
   if (absl::Status s = StripWritePreventingAttributesIfExists(filename);
       !s.ok()) {
     return absl::UnknownError(absl::StrFormat(
         "StripWritePreventingAttributesIfExists failed: %s", s.ToString()));
   }
-  const std::wstring wide = win32::Utf8ToWide(filename);
-  if (wide.empty()) {
+  if (pf_filename.empty()) {
     return absl::InvalidArgumentError("Utf8ToWide failed");
   }
-  if (!::DeleteFileW(wide.c_str())) {
+  if (!::DeleteFileW(pf_filename.c_str())) {
     const DWORD err = ::GetLastError();
     return absl::UnknownError(absl::StrFormat("DeleteFileW failed: %d", err));
   }
   return absl::OkStatus();
 #else   // !_WIN32
-  if (::unlink(filename.c_str()) != 0) {
+  if (::unlink(pf_filename.c_str()) != 0) {
     const int err = errno;
     return absl::UnknownError(
         absl::StrFormat("unlink failed: errno = %d", err));
@@ -290,7 +275,7 @@ absl::Status FileUtilImpl::Unlink(zstring_view filename) const {
 #endif  // _WIN32
 }
 
-absl::Status FileUtil::UnlinkIfExists(zstring_view filename) {
+absl::Status FileUtil::UnlinkIfExists(absl::string_view filename) {
   absl::Status s = FileExists(filename);
   if (s.ok()) {
     return Unlink(filename);
@@ -301,26 +286,25 @@ absl::Status FileUtil::UnlinkIfExists(zstring_view filename) {
   return s;
 }
 
-void FileUtil::UnlinkOrLogError(zstring_view filename) {
+void FileUtil::UnlinkOrLogError(absl::string_view filename) {
   if (absl::Status s = Unlink(filename); !s.ok()) {
     LOG(ERROR) << "Cannot unlink " << filename << ": " << s;
   }
 }
 
-absl::Status FileUtil::FileExists(zstring_view filename) {
-  return FileUtilSingleton::Get()->FileExists(filename);
-}
+absl::Status FileUtil::FileExists(absl::string_view filename) {
+  MAYBE_INVOKE_MOCK(FileExists, filename);
 
-absl::Status FileUtilImpl::FileExists(zstring_view filename) const {
+  const pfstring pf_filename = to_pfstring(filename);
+
 #ifdef _WIN32
-  const std::wstring wide = win32::Utf8ToWide(filename);
-  if (wide.empty()) {
+  if (pf_filename.empty()) {
     return absl::InvalidArgumentError("Utf8ToWide failed");
   }
-  return GetFileAttributes(wide).status();
+  return GetFileAttributes(pf_filename).status();
 #else   // !_WIN32
   struct stat s;
-  if (::stat(filename.c_str(), &s) == 0) {
+  if (::stat(pf_filename.c_str(), &s) == 0) {
     return absl::OkStatus();
   }
   const int err = errno;
@@ -328,18 +312,17 @@ absl::Status FileUtilImpl::FileExists(zstring_view filename) const {
 #endif  // _WIN32
 }
 
-absl::Status FileUtil::DirectoryExists(zstring_view dirname) {
-  return FileUtilSingleton::Get()->DirectoryExists(dirname);
-}
+absl::Status FileUtil::DirectoryExists(absl::string_view dirname) {
+  MAYBE_INVOKE_MOCK(DirectoryExists, dirname);
 
-absl::Status FileUtilImpl::DirectoryExists(zstring_view dirname) const {
+  const pfstring pf_dirname = to_pfstring(dirname);
+
 #ifdef _WIN32
-  const std::wstring wide = win32::Utf8ToWide(dirname);
-  if (wide.empty()) {
+  if (pf_dirname.empty()) {
     return absl::InvalidArgumentError("Utf8ToWide failed");
   }
 
-  absl::StatusOr<DWORD> attrs = GetFileAttributes(wide);
+  absl::StatusOr<DWORD> attrs = GetFileAttributes(pf_dirname);
   if (!attrs.ok()) {
     return std::move(attrs).status();
   }
@@ -347,7 +330,7 @@ absl::Status FileUtilImpl::DirectoryExists(zstring_view dirname) const {
                                              : absl::NotFoundError(dirname);
 #else   // !_WIN32
   struct stat s;
-  if (::stat(dirname.c_str(), &s) == 0) {
+  if (::stat(pf_dirname.c_str(), &s) == 0) {
     return S_ISDIR(s.st_mode)
                ? absl::OkStatus()
                : absl::NotFoundError("Path exists but it's not a directory");
@@ -358,29 +341,29 @@ absl::Status FileUtilImpl::DirectoryExists(zstring_view dirname) const {
 }
 
 #ifdef _WIN32
-bool FileUtil::HideFile(zstring_view filename) {
+bool FileUtil::HideFile(absl::string_view filename) {
   return HideFileWithExtraAttributes(filename, 0);
 }
 
-bool FileUtil::HideFileWithExtraAttributes(zstring_view filename,
+bool FileUtil::HideFileWithExtraAttributes(absl::string_view filename,
                                            DWORD extra_attributes) {
   if (absl::Status s = FileUtil::FileExists(filename); !s.ok()) {
     LOG(WARNING) << "File not exists: " << filename << ": " << s;
     return false;
   }
 
-  const std::wstring wfilename = win32::Utf8ToWide(filename);
+  const pfstring pf_filename = to_pfstring(filename);
   const absl::StatusOr<DWORD> original_attributes =
-      GetFileAttributes(wfilename);
+      GetFileAttributes(pf_filename);
   if (!original_attributes.ok()) {
     LOG(ERROR) << original_attributes.status();
     return false;
   }
   absl::Status s = SetFileAttributes(
-      wfilename, (FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_SYSTEM |
-                  FILE_ATTRIBUTE_NOT_CONTENT_INDEXED | *original_attributes |
-                  extra_attributes) &
-                     ~FILE_ATTRIBUTE_NORMAL);
+      pf_filename, (FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_SYSTEM |
+                    FILE_ATTRIBUTE_NOT_CONTENT_INDEXED | *original_attributes |
+                    extra_attributes) &
+                       ~FILE_ATTRIBUTE_NORMAL);
   if (!s.ok()) {
     LOG(ERROR) << s;
   }
@@ -388,19 +371,18 @@ bool FileUtil::HideFileWithExtraAttributes(zstring_view filename,
 }
 #endif  // _WIN32
 
-absl::Status FileUtil::CopyFile(zstring_view from, zstring_view to) {
-  return FileUtilSingleton::Get()->CopyFile(from, to);
-}
+absl::Status FileUtil::CopyFile(absl::string_view from, absl::string_view to) {
+  MAYBE_INVOKE_MOCK(CopyFile, from, to);
 
-absl::Status FileUtilImpl::CopyFile(zstring_view from, zstring_view to) const {
 #ifdef _WIN32
-  const std::wstring wfrom = win32::Utf8ToWide(from);
-  if (wfrom.empty()) {
+  const pfstring pf_from = to_pfstring(from);
+  const pfstring pf_to = to_pfstring(to);
+
+  if (pf_from.empty()) {
     return absl::InvalidArgumentError(
         absl::StrCat("Cannot convert to wstring: ", from));
   }
-  const std::wstring wto = win32::Utf8ToWide(to);
-  if (wto.empty()) {
+  if (pf_to.empty()) {
     return absl::InvalidArgumentError(
         absl::StrCat("Cannot convert to wstring: ", to));
   }
@@ -427,9 +409,9 @@ absl::Status FileUtilImpl::CopyFile(zstring_view from, zstring_view to) const {
   ofs.close();
 
 #ifdef _WIN32
-  absl::StatusOr<DWORD> attrs = GetFileAttributes(wfrom);
+  absl::StatusOr<DWORD> attrs = GetFileAttributes(pf_from);
   if (attrs.ok()) {
-    if (absl::Status s = SetFileAttributes(wto, *attrs); !s.ok()) {
+    if (absl::Status s = SetFileAttributes(pf_to, *attrs); !s.ok()) {
       LOG(ERROR) << s;
     }
   } else {
@@ -440,13 +422,10 @@ absl::Status FileUtilImpl::CopyFile(zstring_view from, zstring_view to) const {
   return absl::OkStatus();
 }
 
-absl::StatusOr<bool> FileUtil::IsEqualFile(zstring_view filename1,
-                                           zstring_view filename2) {
-  return FileUtilSingleton::Get()->IsEqualFile(filename1, filename2);
-}
+absl::StatusOr<bool> FileUtil::IsEqualFile(absl::string_view filename1,
+                                           absl::string_view filename2) {
+  MAYBE_INVOKE_MOCK(IsEqualFile, filename1, filename2);
 
-absl::StatusOr<bool> FileUtilImpl::IsEqualFile(zstring_view filename1,
-                                               zstring_view filename2) const {
   absl::StatusOr<Mmap> mmap1 = Mmap::Map(filename1, Mmap::READ_ONLY);
   if (!mmap1.ok()) {
     return std::move(mmap1).status();
@@ -458,13 +437,10 @@ absl::StatusOr<bool> FileUtilImpl::IsEqualFile(zstring_view filename1,
   return mmap1->span() == mmap2->span();
 }
 
-absl::StatusOr<bool> FileUtil::IsEquivalent(zstring_view filename1,
-                                            zstring_view filename2) {
-  return FileUtilSingleton::Get()->IsEquivalent(filename1, filename2);
-}
+absl::StatusOr<bool> FileUtil::IsEquivalent(absl::string_view filename1,
+                                            absl::string_view filename2) {
+  MAYBE_INVOKE_MOCK(IsEquivalent, filename1, filename2);
 
-absl::StatusOr<bool> FileUtilImpl::IsEquivalent(zstring_view filename1,
-                                                zstring_view filename2) const {
   // If either of filename1 or filename2 does not exist, an error is returned.
   // Because filesystem::equivalent on some environments returns false instead,
   // that case is checked here to keep the consistency.
@@ -472,13 +448,8 @@ absl::StatusOr<bool> FileUtilImpl::IsEquivalent(zstring_view filename1,
     return absl::UnknownError("No such file or directory");
   }
 
-#ifdef __APPLE__
-  return absl::UnimplementedError(
-      "std::filesystem is only available on macOS 10.15, iOS 13.0, or later");
-#else   // __APPLE__
-
-  const std::filesystem::path src = filename1.c_str();
-  const std::filesystem::path dst = filename2.c_str();
+  const std::filesystem::path src = to_pfstring(filename1);
+  const std::filesystem::path dst = to_pfstring(filename2);
 
   std::error_code error_code;
   if (bool is_equiv = std::filesystem::equivalent(src, dst, error_code);
@@ -487,20 +458,18 @@ absl::StatusOr<bool> FileUtilImpl::IsEquivalent(zstring_view filename1,
   }
   return absl::UnknownError(
       absl::StrCat(error_code.value(), " ", error_code.message()));
-#endif  // __APPLE__
 }
 
-absl::Status FileUtil::AtomicRename(zstring_view from, zstring_view to) {
-  return FileUtilSingleton::Get()->AtomicRename(from, to);
-}
+absl::Status FileUtil::AtomicRename(absl::string_view from,
+                                    absl::string_view to) {
+  MAYBE_INVOKE_MOCK(AtomicRename, from, to);
 
-absl::Status FileUtilImpl::AtomicRename(zstring_view from,
-                                        zstring_view to) const {
+  const pfstring pf_from = to_pfstring(from);
+  const pfstring pf_to = to_pfstring(to);
+
 #ifdef _WIN32
-  const std::wstring fromw = win32::Utf8ToWide(from);
-  const std::wstring tow = win32::Utf8ToWide(to);
 
-  const absl::StatusOr<DWORD> original_attributes = GetFileAttributes(fromw);
+  const absl::StatusOr<DWORD> original_attributes = GetFileAttributes(pf_from);
   if (!original_attributes.ok()) {
     return absl::Status(
         original_attributes.status().code(),
@@ -513,12 +482,13 @@ absl::Status FileUtilImpl::AtomicRename(zstring_view from,
         absl::StrFormat("StripWritePreventingAttributesIfExists failed: %s",
                         s.message()));
   }
-  if (!::MoveFileExW(fromw.c_str(), tow.c_str(),
+  if (!::MoveFileExW(pf_from.c_str(), pf_to.c_str(),
                      MOVEFILE_COPY_ALLOWED | MOVEFILE_REPLACE_EXISTING)) {
     const DWORD move_file_ex_error = ::GetLastError();
     return Win32ErrorToStatus(move_file_ex_error, "MoveFileExW failed");
   }
-  if (absl::Status s = SetFileAttributes(tow, *original_attributes); !s.ok()) {
+  if (absl::Status s = SetFileAttributes(pf_to, *original_attributes);
+      !s.ok()) {
     return absl::Status(
         s.code(),
         absl::StrFormat("SetFileAttributes failed: original_attrs: %d",
@@ -526,10 +496,10 @@ absl::Status FileUtilImpl::AtomicRename(zstring_view from,
   }
   return absl::OkStatus();
 #else   // !_WIN32
-  // Mac OSX: use rename(2), but rename(2) on Mac OSX
-  // is not properly implemented, atomic rename is POSIX spec though.
+  // macOS: use rename(2), but rename(2) on macOS is not properly implemented,
+  // atomic rename is POSIX spec though.
   // http://www.weirdnet.nl/apple/rename.html
-  if (const int r = rename(from.c_str(), to.c_str()); r != 0) {
+  if (const int r = rename(pf_from.c_str(), pf_to.c_str()); r != 0) {
     const int err = errno;
     return absl::UnknownError(
         absl::StrFormat("errno(%d): %s", err, std::strerror(err)));
@@ -538,18 +508,12 @@ absl::Status FileUtilImpl::AtomicRename(zstring_view from,
 #endif  // _WIN32
 }
 
-absl::Status FileUtil::CreateHardLink(zstring_view from, zstring_view to) {
-  return FileUtilSingleton::Get()->CreateHardLink(from, to);
-}
+absl::Status FileUtil::CreateHardLink(absl::string_view from,
+                                      absl::string_view to) {
+  MAYBE_INVOKE_MOCK(CreateHardLink, from, to);
 
-absl::Status FileUtilImpl::CreateHardLink(zstring_view from, zstring_view to) {
-#ifdef __APPLE__
-  return absl::UnimplementedError(
-      "std::filesystem is only available on macOS 10.15, iOS 13.0, or later.");
-#else   // __APPLE__
-
-  const std::filesystem::path src = from.c_str();
-  const std::filesystem::path dst = to.c_str();
+  const std::filesystem::path src = to_pfstring(from);
+  const std::filesystem::path dst = to_pfstring(to);
 
   std::error_code error_code;
   std::filesystem::create_hard_link(src, dst, error_code);
@@ -558,7 +522,6 @@ absl::Status FileUtilImpl::CreateHardLink(zstring_view from, zstring_view to) {
         absl::StrCat(error_code.message(), " (code=", error_code.value(), ")"));
   }
   return absl::OkStatus();
-#endif  // __APPLE__
 }
 
 std::string FileUtil::JoinPath(
@@ -577,49 +540,46 @@ std::string FileUtil::JoinPath(
 }
 
 // TODO(taku): what happens if filename == '/foo/bar/../bar/..
-std::string FileUtil::Dirname(zstring_view filename) {
-  const std::string filename_str(filename.c_str());
-  const std::string::size_type p = filename_str.find_last_of(kFileDelimiter);
-  if (p == std::string::npos) {
+std::string FileUtil::Dirname(absl::string_view filename) {
+  const size_t p = filename.find_last_of(kFileDelimiter);
+  if (p == absl::string_view::npos) {
     return "";
   }
-  return filename_str.substr(0, p);
+  return std::string(filename.substr(0, p));
 }
 
-std::string FileUtil::Basename(zstring_view filename) {
-  std::string filename_str(filename.c_str());
-  const std::string::size_type p = filename_str.find_last_of(kFileDelimiter);
-  if (p == std::string::npos) {
-    return filename_str;
+std::string FileUtil::Basename(absl::string_view filename) {
+  const size_t p = filename.find_last_of(kFileDelimiter);
+  if (p == absl::string_view::npos) {
+    return std::string(filename);
   }
-  return filename_str.substr(p + 1, filename_str.size() - p);
+  return std::string(filename.substr(p + 1));
 }
 
-std::string FileUtil::NormalizeDirectorySeparator(zstring_view path) {
-  if constexpr (TargetIsWindows()) {
+std::string FileUtil::NormalizeDirectorySeparator(absl::string_view path) {
+  if constexpr (port::IsWindows()) {
     constexpr absl::string_view kFileDelimiterForUnix = "/";
     constexpr absl::string_view kFileDelimiterForWindows = "\\";
     return absl::StrReplaceAll(
         path, {{kFileDelimiterForUnix, kFileDelimiterForWindows}});
   }
-  return std::string(path.view());
+  return std::string(path);
 }
 
 absl::StatusOr<FileTimeStamp> FileUtil::GetModificationTime(
-    zstring_view filename) {
-  return FileUtilSingleton::Get()->GetModificationTime(filename);
-}
+    absl::string_view filename) {
+  MAYBE_INVOKE_MOCK(GetModificationTime, filename);
 
-absl::StatusOr<FileTimeStamp> FileUtilImpl::GetModificationTime(
-    zstring_view filename) const {
+  const pfstring pf_filename = to_pfstring(filename);
+
 #if defined(_WIN32)
-  const std::wstring wide = win32::Utf8ToWide(filename);
-  if (wide.empty()) {
+  if (pf_filename.empty()) {
     return absl::InvalidArgumentError(
         absl::StrCat("Utf8ToWide failed: ", filename));
   }
   WIN32_FILE_ATTRIBUTE_DATA info = {};
-  if (!::GetFileAttributesEx(wide.c_str(), GetFileExInfoStandard, &info)) {
+  if (!::GetFileAttributesEx(pf_filename.c_str(), GetFileExInfoStandard,
+                             &info)) {
     const auto last_error = ::GetLastError();
     return Win32ErrorToStatus(
         last_error, absl::StrCat("GetFileAttributesEx(", filename, ") failed"));
@@ -628,7 +588,7 @@ absl::StatusOr<FileTimeStamp> FileUtilImpl::GetModificationTime(
          info.ftLastWriteTime.dwLowDateTime;
 #else   // !_WIN32
   struct stat stat_info;
-  if (::stat(filename.c_str(), &stat_info)) {
+  if (::stat(pf_filename.c_str(), &stat_info)) {
     const int err = errno;
     return absl::ErrnoToStatus(err, absl::StrCat("stat failed: ", filename));
   }
@@ -636,8 +596,22 @@ absl::StatusOr<FileTimeStamp> FileUtilImpl::GetModificationTime(
 #endif  // _WIN32
 }
 
+absl::StatusOr<std::string> FileUtil::ReadSymlink(absl::string_view filename) {
+  MAYBE_INVOKE_MOCK(ReadSymlink, filename);
+
+  const std::filesystem::path path = to_pfstring(filename);
+  std::error_code error_code;
+  const std::filesystem::path link_path =
+      std::filesystem::read_symlink(path, error_code);
+  if (error_code) {
+    return absl::UnknownError(
+        absl::StrCat(error_code.message(), " (code=", error_code.value(), ")"));
+  }
+  return link_path.string();
+}
+
 absl::StatusOr<std::string> FileUtil::GetContents(
-    zstring_view filename, std::ios_base::openmode mode) {
+    absl::string_view filename, std::ios_base::openmode mode) {
   InputFileStream ifs(filename, mode | std::ios::ate);
   if (ifs.fail()) {
     const int err = errno;
@@ -670,7 +644,7 @@ absl::StatusOr<std::string> FileUtil::GetContents(
   return content;
 }
 
-absl::Status FileUtil::SetContents(zstring_view filename,
+absl::Status FileUtil::SetContents(absl::string_view filename,
                                    absl::string_view content,
                                    std::ios_base::openmode mode) {
   OutputFileStream ofs(filename, mode);
@@ -690,7 +664,9 @@ absl::Status FileUtil::SetContents(zstring_view filename,
 }
 
 void FileUtil::SetMockForUnitTest(FileUtilInterface* mock) {
-  FileUtilSingleton::SetMock(mock);
+  g_mock.store(mock, std::memory_order_release);
 }
+
+#undef MAYBE_INVOKE_MOCK
 
 }  // namespace mozc

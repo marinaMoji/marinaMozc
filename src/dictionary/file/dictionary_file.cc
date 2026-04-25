@@ -29,6 +29,7 @@
 
 #include "dictionary/file/dictionary_file.h"
 
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -38,42 +39,38 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
 #include "base/mmap.h"
-#include "dictionary/file/codec_interface.h"
+#include "dictionary/file/codec.h"
 #include "dictionary/file/section.h"
 
 namespace mozc {
 namespace dictionary {
 
-DictionaryFile::DictionaryFile(const DictionaryFileCodecInterface *file_codec)
-    : file_codec_(file_codec) {
-  DCHECK(file_codec_);
-}
+DictionaryFile::DictionaryFile(const DictionaryFileCodec& file_codec)
+    : file_codec_(file_codec) {}
 
-absl::Status DictionaryFile::OpenFromFile(const std::string &file) {
-  absl::StatusOr<Mmap> mapping = Mmap::Map(file);
+absl::Status DictionaryFile::OpenFromFile(absl::string_view file) {
+  absl::StatusOr<Mmap> mapping = Mmap::Map(std::string(file));
   if (!mapping.ok()) {
     return std::move(mapping).status();
   }
   mapping_ = *std::move(mapping);
-  return OpenFromImage(mapping_.begin(), mapping_.size());
+  return OpenFromImage(absl::string_view(mapping_.begin(), mapping_.size()));
 }
 
-absl::Status DictionaryFile::OpenFromImage(const char *image, int length) {
+absl::Status DictionaryFile::OpenFromImage(absl::string_view image) {
   sections_.clear();
-  return file_codec_->ReadSections(image, length, &sections_);
+  return file_codec_.ReadSections(image, &sections_);
 }
 
-const char *DictionaryFile::GetSection(const absl::string_view section_name,
-                                       int *len) const {
-  DCHECK(len);
-  const std::string &name = file_codec_->GetSectionName(section_name);
-  for (const auto &section : sections_) {
+std::optional<absl::string_view> DictionaryFile::GetSection(
+    absl::string_view section_name) const {
+  const std::string name = file_codec_.GetSectionName(section_name);
+  for (const auto& section : sections_) {
     if (section.name == name) {
-      *len = section.len;
-      return section.ptr;
+      return section.image;
     }
   }
-  return nullptr;
+  return std::nullopt;
 }
 
 }  // namespace dictionary

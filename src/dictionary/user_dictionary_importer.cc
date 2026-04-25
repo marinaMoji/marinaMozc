@@ -40,6 +40,8 @@
 
 #include "absl/algorithm/container.h"
 #include "absl/base/attributes.h"
+#include "absl/base/no_destructor.h"
+#include "absl/container/flat_hash_map.h"
 #include "absl/container/flat_hash_set.h"
 #include "absl/hash/hash.h"
 #include "absl/log/check.h"
@@ -74,7 +76,7 @@ size_t HashOf(const UserDictionary::Entry& entry) {
 }
 
 // Normalizes POS (removes full width ascii and half width katakana).
-std::string NormalizePos(const absl::string_view input) {
+std::string NormalizePos(absl::string_view input) {
   std::string tmp = japanese_util::FullWidthAsciiToHalfWidthAscii(input);
   return japanese_util::HalfWidthKatakanaToFullWidthKatakana(tmp);
 }
@@ -84,19 +86,22 @@ std::pair<absl::string_view, absl::string_view> SplitPosAndLocale(
   return absl::StrSplit(pos, absl::MaxSplits(':', 1));
 }
 
+// hash_map from third_party IME pos to Mozc pos.
 // A data type to hold conversion rules of POSes. If mozc_pos is set to be an
 // empty string (""), it means that words of the POS should be ignored in Mozc.
-struct PosMap {
-  absl::string_view source_pos;      // POS string of a third party IME.
-  UserDictionary::PosType mozc_pos;  // POS of Mozc.
-};
+// key: string user POS defined in third_party_pos_map.def
+// value: PosType enum.
+using PosMap = absl::flat_hash_map<absl::string_view, UserDictionary::PosType>;
 
 // Include actual POS mapping rules defined outside the file.
 #include "dictionary/pos_map.inc"
 
+}  // namespace
+
 // Convert POS of a third party IME to that of Mozc using the given mapping.
-bool ConvertEntryInternal(const absl::Span<const PosMap> pos_map,
-                          const RawEntry& from, UserDictionary::Entry* to) {
+bool ConvertEntry(const RawEntry& from, UserDictionary::Entry* to) {
+  const PosMap& pos_map = *kPosMap;
+
   if (to == nullptr) {
     LOG(ERROR) << "Null pointer is passed.";
     return false;
@@ -117,27 +122,20 @@ bool ConvertEntryInternal(const absl::Span<const PosMap> pos_map,
   absl::ConsumeSuffix(&pos, "*");
 
   // Search for mapping for the given POS.
-  const auto found = absl::c_lower_bound(
-      pos_map, pos, [](const PosMap map, absl::string_view pos) -> bool {
-        return map.source_pos < pos;
-      });
-  if (found == pos_map.end() || found->source_pos != pos) {
+  const auto it = pos_map.find(pos);
+  if (it == pos_map.end()) {
     LOG(WARNING) << "Invalid POS is passed: " << from.pos;
     return false;
   }
-  if (!UserDictionary::PosType_IsValid(found->mozc_pos)) {
-    to->clear_key();
-    to->clear_value();
-    to->clear_pos();
+
+  const UserDictionary::PosType pos_type = it->second;
+  if (!UserDictionary::PosType_IsValid(pos_type)) {
     return false;
   }
 
-  to->set_key(from.key);
+  to->set_key(user_dictionary::NormalizeReading(from.key));
   to->set_value(from.value);
-  to->set_pos(found->mozc_pos);
-
-  // Normalize reading.
-  to->set_key(user_dictionary::NormalizeReading(to->key()));
+  to->set_pos(pos_type);
 
   // Copy comment.
   if (!from.comment.empty()) {
@@ -152,8 +150,6 @@ bool ConvertEntryInternal(const absl::Span<const PosMap> pos_map,
   // Validation.
   return user_dictionary::ValidateEntry(*to).ok();
 }
-
-}  // namespace
 
 absl::Status ImportFromIterator(InputIteratorInterface* iter,
                                 UserDictionary* user_dic) {
@@ -346,10 +342,6 @@ bool TextInputIterator::Next(RawEntry* entry) {
   return false;
 }
 
-bool ConvertEntry(const RawEntry& from, UserDictionary::Entry* to) {
-  return ConvertEntryInternal(kPosMap, from, to);
-}
-
 IMEType GuessIMEType(absl::string_view line) {
   if (line.empty()) {
     return NUM_IMES;
@@ -459,8 +451,8 @@ EncodingType GuessEncodingType(absl::string_view str) {
   return SHIFT_JIS;
 }
 
-EncodingType GuessFileEncodingType(const std::string& filename) {
-  absl::StatusOr<Mmap> mmap = Mmap::Map(filename, Mmap::READ_ONLY);
+EncodingType GuessFileEncodingType(absl::string_view filename) {
+  absl::StatusOr<Mmap> mmap = Mmap::Map(std::string(filename), Mmap::READ_ONLY);
   if (!mmap.ok()) {
     LOG(ERROR) << "cannot open: " << filename << ": " << mmap.status();
     return NUM_ENCODINGS;

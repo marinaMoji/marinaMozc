@@ -37,67 +37,64 @@
 
 #include "absl/strings/string_view.h"
 #include "absl/types/span.h"
-#include "dictionary/system/codec_interface.h"
 
 namespace mozc {
 namespace dictionary {
 
-class SystemDictionaryCodec : public SystemDictionaryCodecInterface {
+struct TokenInfo;
+
+class SystemDictionaryCodec {
  public:
+  virtual ~SystemDictionaryCodec() {}
+
   // Return section name for key trie
-  std::string GetSectionNameForKey() const override;
+  virtual absl::string_view GetSectionNameForKey() const;
 
   // Return section name for value trie
-  std::string GetSectionNameForValue() const override;
+  virtual absl::string_view GetSectionNameForValue() const;
 
   // Return section name for tokens array
-  std::string GetSectionNameForTokens() const override;
+  virtual absl::string_view GetSectionNameForTokens() const;
 
   // Return section name for frequent pos map
-  std::string GetSectionNameForPos() const override;
+  virtual absl::string_view GetSectionNameForPos() const;
 
   // Compresses key string into small bytes.
-  void EncodeKey(absl::string_view src, std::string* dst) const override;
+  virtual std::string EncodeKey(absl::string_view src) const;
 
   // Decompress key string
-  void DecodeKey(absl::string_view src, std::string* dst) const override;
+  virtual std::string DecodeKey(absl::string_view src) const;
 
   // Returns the length of encoded key string.
-  size_t GetEncodedKeyLength(absl::string_view src) const override;
+  virtual size_t GetEncodedKeyLength(absl::string_view src) const;
 
   // Returns the length of decoded key string.
-  size_t GetDecodedKeyLength(absl::string_view src) const override;
+  virtual size_t GetDecodedKeyLength(absl::string_view src) const;
 
   // Compresses value string into small bytes.
-  void EncodeValue(absl::string_view src, std::string* dst) const override;
+  virtual std::string EncodeValue(absl::string_view src) const;
 
   // Decompress value string
-  void DecodeValue(absl::string_view src, std::string* dst) const override;
+  virtual std::string DecodeValue(absl::string_view src) const;
 
   // Compress tokens
-  void EncodeTokens(absl::Span<const TokenInfo> tokens,
-                    std::string* output) const override;
-
-  // Decompress tokens
-  void DecodeTokens(const uint8_t* ptr,
-                    std::vector<TokenInfo>* tokens) const override;
+  virtual std::string EncodeTokens(absl::Span<const TokenInfo> tokens) const;
 
   // Decompress a token.
-  bool DecodeToken(const uint8_t* ptr, TokenInfo* token_info,
-                   int* read_bytes) const override;
+  virtual bool DecodeToken(const uint8_t* ptr, TokenInfo* token_info,
+                           int* read_bytes) const;
 
   // Read a token for reverse lookup
   // If the token have value id, assign it to |id_in_value_trie|
   // otherwise assign -1
   // Return false if a token is the last token for a certain key
-  bool ReadTokenForReverseLookup(const uint8_t* ptr, int* value_id,
-                                 int* read_bytes) const override;
+  virtual bool ReadTokenForReverseLookup(const uint8_t* ptr, int* value_id,
+                                         int* read_bytes) const;
 
-  uint8_t GetTokensTerminationFlag() const override;
+  virtual uint8_t GetTokensTerminationFlag() const;
 
  private:
-  void EncodeToken(absl::Span<const TokenInfo> tokens, int index,
-                   std::string* output) const;
+  std::string EncodeToken(absl::Span<const TokenInfo> tokens, int index) const;
 };
 
 }  // namespace dictionary

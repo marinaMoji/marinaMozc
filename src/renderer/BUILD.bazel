@@ -40,7 +40,6 @@ load(
     "BRANDING",
     "MACOS_BUNDLE_ID_PREFIX",
 )
-load("//bazel/win32:build_defs.bzl", "features_gdi")
 
 package(default_visibility = ["//visibility:private"])
 
@@ -92,7 +91,6 @@ mozc_cc_test(
         ":renderer_client",
         "//base:number_util",
         "//base:version",
-        "//base/strings:zstring_view",
         "//ipc",
         "//protocol:commands_cc_proto",
         "//protocol:renderer_cc_proto",
@@ -113,6 +111,7 @@ mozc_cc_library(
     deps = [
         ":renderer_interface",
         "//base:const",
+        "//base:random",
         "//base:system_util",
         "//base:vlog",
         "//client:client_interface",
@@ -235,18 +234,10 @@ mozc_cc_library(
     name = "renderer_style_handler",
     srcs = ["renderer_style_handler.cc"],
     hdrs = ["renderer_style_handler.h"],
-    features = features_gdi(),  # for Windows
     visibility = ["//renderer:__subpackages__"],
     deps = [
-        "//base:singleton",
         "//protocol:renderer_cc_proto",
-    ] + mozc_select(
-        windows = [
-            "//bazel/win32:gdi32",
-            "//bazel/win32:user32",
-            "@com_microsoft_wil//:wil",
-        ],
-    ),
+    ],
 )
 
 mozc_cc_test(
@@ -275,10 +266,6 @@ mozc_macos_application(
         "//renderer:__subpackages__",
     ],
     deps = [":mozc_renderer_main_macos"],
-    # When we support Breakpad, uncomment the following block.
-    # additional_contents = {
-    #     "[Breakpad]" : "Frameworks",
-    # },
 )
 
 mozc_cc_library(

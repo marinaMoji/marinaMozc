@@ -31,6 +31,8 @@
 #   Declaration of package_group for visibility managing.
 
 load("@bazel_skylib//lib:selects.bzl", "selects")
+load("@bazel_skylib//rules:common_settings.bzl", "bool_flag")
+load("@build_bazel_rules_apple//apple:versioning.bzl", "apple_bundle_version")
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load(
     "//:build_defs.bzl",
@@ -40,6 +42,7 @@ load(
     "mozc_select_enable_usage_rewriter",
 )
 load("//:config.bzl", "BAZEL_TOOLS_PREFIX")
+load("//:version.bzl", "DEFAULT_BUILD_LABEL_MACOS")
 load("//bazel:stubs.bzl", "bzl_library")
 
 package(default_visibility = ["//:__subpackages__"])
@@ -134,7 +137,7 @@ platform(
         "@platforms//os:windows",
         "@bazel_tools//tools/cpp:clang-cl",
     ],
-    parents = ["@local_config_platform//:host"],
+    parents = ["@platforms//host"],
 )
 
 platform(
@@ -225,14 +228,43 @@ cc_library(
         ],
     ) + mozc_select_enable_session_watchdog(
         off = ["MOZC_DISABLE_SESSION_WATCHDOG"],
-    ) + mozc_select_enable_supplemental_model([
-    ]) + mozc_select_enable_usage_rewriter(
+    ) + mozc_select_enable_supplemental_model(
+        on = ["MOZC_ENABLE_SUPPLEMENTAL_MODEL"],
+    ) + mozc_select_enable_usage_rewriter(
         off = ["NO_USAGE_REWRITER"],
     ) + select({
         ":dev_channel": ["CHANNEL_DEV=1"],
         "//conditions:default": [],
     }),
 )
+
+exports_files(
+    ["version.bzl"],
+    visibility = [
+        "//base:__pkg__",
+        "//data_manager:__subpackages__",
+        "//tools:__subpackages__",
+        "//tools/release:__pkg__",
+    ],
+)
+
+# The version can be specifyed by the --embed_label flag.
+# e.g. bazel build --embed_label="2.32.5994.101" package
+# The default version is specified by DEFAULT_BUILD_LABEL_MACOS in version.bzl.
+# LINT.IfChange
+apple_bundle_version(
+    name = "version_macos",
+    build_label_pattern = "{version}.{revision}",  # e.g. 2.32.5994.101
+    build_version = "{version}.{revision}",  # e.g. 2.32.5994.101
+    capture_groups = {
+        "version": "\\d+\\.\\d+\\.\\d+",  # e.g. 2.32.5994
+        "revision": "\\d+",  # e.g. 101
+    },
+    fallback_build_label = DEFAULT_BUILD_LABEL_MACOS,  # e.g. 2.32.5994.101
+    short_version_string = "{version}",  # e.g. 2.32.5994
+    visibility = ["//:__subpackages__"],
+)
+# LINT.ThenChange(//version.bzl)
 
 bzl_library(
     name = "build_defs_bzl",
@@ -255,6 +287,13 @@ bzl_library(
     srcs = ["config.bzl"],
     test_size = "small",
     visibility = ["//:__subpackages__"],
+)
+
+bzl_library(
+    name = "version_bzl",
+    srcs = ["version.bzl"],
+    test_size = "small",
+    visibility = ["//visibility:private"],
 )
 
 filegroup(
@@ -304,5 +343,27 @@ selects.config_setting_group(
         "//bazel/cc_target_os:windows",
         "//bazel/cc_target_os:oss_windows",
         "//bazel/cc_target_os:prod_windows",
+    ],
+)
+
+bool_flag(
+    name = "win_universal_installer",
+    build_setting_default = False,
+)
+
+config_setting(
+    name = "local_win_universal_installer",
+    flag_values = {
+        "//:win_universal_installer": "True",
+    },
+)
+
+# Currently "enable_win_universal_installer" flag is compatible only with
+# "@platforms//cpu:x86_64".
+selects.config_setting_group(
+    name = "enable_win_universal_installer",
+    match_all = [
+        ":local_win_universal_installer",
+        "@platforms//cpu:x86_64",
     ],
 )

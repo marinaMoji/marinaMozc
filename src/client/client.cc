@@ -98,7 +98,7 @@ constexpr absl::Duration kDeleteSessionOnDestructorTimeout = absl::Seconds(1);
 
 Client::Client()
     : id_(0),
-      server_launcher_(new ServerLauncher),
+      server_launcher_(std::make_unique<ServerLauncher>()),
       timeout_(kDefaultTimeout),
       server_status_(SERVER_UNKNOWN),
       server_protocol_version_(0),
@@ -432,10 +432,6 @@ void Client::EnableCascadingWindow(const bool enable) {
 
 void Client::set_timeout(absl::Duration timeout) { timeout_ = timeout; }
 
-void Client::set_server_program(const absl::string_view program_path) {
-  server_launcher_->set_server_program(program_path);
-}
-
 void Client::set_suppress_error_dialog(bool suppress) {
   server_launcher_->set_suppress_error_dialog(suppress);
 }
@@ -573,7 +569,6 @@ bool Client::PingServer() const {
   }
 
   commands::Input input;
-  commands::Output output;
 
   InitInput(&input);
   input.set_type(commands::Input::NO_OPERATION);
@@ -595,7 +590,10 @@ bool Client::PingServer() const {
   // Serialize
   std::string request;
   std::string response;
-  input.SerializeToString(&request);
+  if (!input.SerializeToString(&request)) {
+    LOG(ERROR) << "SerializeToString failed";
+    return false;
+  }
 
   if (!client->Call(request, &response, timeout_)) {
     LOG(ERROR) << "IPCClient::Call failed: " << client->GetLastIPCError();
@@ -643,7 +641,10 @@ bool Client::Call(const commands::Input &input, commands::Output *output) {
 
   // Serialize
   std::string request;
-  input.SerializeToString(&request);
+  if (!input.SerializeToString(&request)) {
+    LOG(ERROR) << "SerializeToString failed";
+    return false;
+  }
 
   // Call IPC
   std::unique_ptr<IPCClientInterface> client(client_factory_->NewClient(

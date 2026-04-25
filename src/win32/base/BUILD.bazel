@@ -265,7 +265,6 @@ mozc_cc_test(
         ":keyboard",
         ":keyevent_handler",
         "//base:version",
-        "//base/strings:zstring_view",
         "//client",
         "//client:client_interface",
         "//composer:key_event_util",
@@ -424,7 +423,6 @@ mozc_cc_library(
     target_compatible_with = ["@platforms//os:windows"],
     deps = [
         "//base:japanese_util",
-        "//base:util",
         "//base/win32:wide_char",
         "//protocol:commands_cc_proto",
         "@com_google_absl//absl/strings",

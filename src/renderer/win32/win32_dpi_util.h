@@ -27,20 +27,23 @@
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include <google/protobuf/compiler/command_line_interface.h>
-#include <google/protobuf/compiler/cpp/cpp_generator.h>
+#ifndef MOZC_RENDERER_WIN32_WIN32_DPI_UTIL_H_
+#define MOZC_RENDERER_WIN32_WIN32_DPI_UTIL_H_
 
-// A custom protoc entrypoint for Mozc, which needs only C++ bindings.
-// Having this custom entrypoint allows us to
-//  * reduce the maintenance cost of protobuf.gyp, because we do not need to
-//    build generators for other languages.
-//  * avoid hard-coded OPENSOURCE_PROTOBUF_CPP_BOOTSTRAP macro behavior in the
-//    third_party/protobuf/src/google/protobuf/compiler/main.cc
-int main(int argc, char* argv[]) {
-  google::protobuf::compiler::CommandLineInterface cli;
-  google::protobuf::compiler::cpp::CppGenerator cpp_generator;
-  cli.RegisterGenerator("--cpp_out", "--cpp_opt", &cpp_generator,
-                        "Generate C++ header and source.");
+#include "protocol/renderer_style.pb.h"
 
-  return cli.Run(argc, argv);
-}
+namespace mozc {
+namespace renderer {
+namespace win32 {
+
+// Returns DPI scaling factor on Windows.
+double GetDPIScalingFactor();
+
+// Get RendererStyle adjusted with the DPI scaling factor on Windows.
+void GetScaledRendererStyle(::mozc::renderer::RendererStyle* style);
+
+}  // namespace win32
+}  // namespace renderer
+}  // namespace mozc
+
+#endif  // MOZC_RENDERER_WIN32_WIN32_DPI_UTIL_H_

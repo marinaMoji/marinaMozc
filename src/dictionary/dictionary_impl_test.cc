@@ -73,7 +73,7 @@ std::unique_ptr<DictionaryData> CreateDictionaryData() {
           .Build()
           .value();
   auto val_dict = std::make_unique<ValueDictionary>(*ret->pos_matcher,
-                                                    &sys_dict->value_trie());
+                                                    sys_dict->value_trie());
 
   std::unique_ptr<UserPos> user_pos =
       UserPos::CreateFromDataManager(data_manager);
@@ -369,6 +369,16 @@ TEST_F(DictionaryImplTest, LookupComment) {
   // "UserDictionaryStub" as comment.
   EXPECT_TRUE(d->LookupComment("key", "comment", convreq, &comment));
   EXPECT_EQ(comment, "UserDictionaryStub");
+}
+
+TEST_F(DictionaryImplTest, HasKeyValue) {
+  std::unique_ptr<DictionaryData> data = CreateDictionaryData();
+  DictionaryInterface* d = data->dictionary.get();
+  EXPECT_TRUE(d->HasKey("きょうと"));
+  EXPECT_TRUE(d->HasValue("京都"));
+
+  EXPECT_FALSE(d->HasKey("__きょうと__"));
+  EXPECT_FALSE(d->HasValue("__京都__"));
 }
 
 }  // namespace dictionary

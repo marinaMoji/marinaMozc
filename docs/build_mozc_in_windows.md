@@ -70,7 +70,6 @@ In this step, additional build dependencies will be downloaded, including:
 *   [Ninja 1.11.0](https://github.com/ninja-build/ninja/releases/tag/v1.11.0)
 *   [Qt 6.9.1](https://download.qt.io/archive/qt/6.8/6.8.0/submodules/qtbase-everywhere-src-6.9.1.tar.xz)
 *   [.NET tools](../dotnet-tools.json)
-*   [git submodules](../.gitmodules)
 
 ## Build
 
@@ -127,6 +126,22 @@ python build_tools/build_qt.py --release --confirm_license --target_arch=arm64
 bazelisk build --config oss_windows --config release_build package --platforms=//:windows-arm64
 ```
 
+### Build `Mozc64.msi` for both X64 and ARM64
+
+To built a X64 installer that is also compatible with ARM64 machines, run the
+following commands:
+
+```
+python build_tools/build_qt.py --release --confirm_license
+bazelisk build --config oss_windows --config release_build --config win_universal_installer package
+```
+
+To build the above installer, the following Visual Studio components also need
+to be installed:
+
+*   MSVC v143 - VS 2022 C++ ARM64/ARM64EC build tools (Latest)
+*   C++ ATL for latest v143 build tools (ARM64/ARM64EC)
+
 ## Bazel command examples
 
 ### Bazel User Guide
@@ -174,7 +189,7 @@ even if downloaded from https://github.com/google/mozc/.
 
 --------------------------------------------------------------------------------
 
-## Build Mozc for Linux Desktop with GYP (deprecated):
+## Build with GYP (deprecated):
 
 ⚠️ The GYP build is deprecated and no longer supported.
 

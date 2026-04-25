@@ -45,6 +45,7 @@
 #include "data_manager/pos_list_provider.h"
 #include "dictionary/user_dictionary_storage.h"
 #include "dictionary/user_dictionary_util.h"
+#include "dictionary/user_pos.h"
 #include "gui/base/util.h"
 #include "protocol/user_dictionary_storage.pb.h"
 
@@ -82,7 +83,7 @@ QString GetEnv(const char* envname) {
   if (buffer_size == 0) {
     return QLatin1String("");
   }
-  std::unique_ptr<wchar_t[]> buffer(new wchar_t[buffer_size]);
+  auto buffer = std::make_unique<wchar_t[]>(buffer_size);
   const DWORD num_copied =
       ::GetEnvironmentVariable(wenvname.c_str(), buffer.get(), buffer_size);
   if (num_copied > 0) {
@@ -107,7 +108,7 @@ QString GetEnv(const char* envname) {
 
 WordRegisterDialog::WordRegisterDialog()
     : is_available_(true),
-      storage_(new UserDictionaryStorage()),
+      storage_(std::make_unique<UserDictionaryStorage>()),
       client_(client::ClientFactory::NewClient()),
       window_title_(GuiUtil::ProductName()) {
   setupUi(this);
@@ -271,7 +272,7 @@ void WordRegisterDialog::Clicked(QAbstractButton* button) {
 WordRegisterDialog::ErrorCode WordRegisterDialog::SaveEntry() {
   const std::string key = ReadinglineEdit->currentText().toStdString();
   const std::string value = WordlineEdit->text().toStdString();
-  UserDictionary::PosType pos = user_dictionary::ToPosType(
+  UserDictionary::PosType pos = dictionary::UserPos::ToPosType(
       PartOfSpeechcomboBox->currentText().toStdString());
 
   if (key.empty()) {

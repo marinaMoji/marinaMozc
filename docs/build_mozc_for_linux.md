@@ -9,8 +9,8 @@
 If you are not sure what the following commands do, please check the
 descriptions below and make sure the operations before running them.
 
-```
-git clone https://github.com/google/mozc.git --recursive
+```sh
+git clone https://github.com/google/mozc.git
 cd mozc/src
 
 bazelisk build package --config oss_linux --config release_build
@@ -52,9 +52,7 @@ version of Bazel you are using.
 GCC or Clang is needed to build Mozc.
 
 While Linux continuous builds currently use GCC, Mozc's C++ code is designed to
-be compatible with Clang (for macOS, Windows, Android, and Google internal use)
-and Visual C++ 2022 (for Windows GYP build, which is going to be deprecated) as
-well.
+be compatible with Clang (for macOS, Windows, Android, and Google internal use).
 
 💡 See [`.github/workflows/linux.yaml`](../.github/workflows/linux.yaml) on which
 version of GCC is tested against.
@@ -113,8 +111,8 @@ macro defined in
 
 You can download Mozc source code as follows.
 
-```
-git clone https://github.com/google/mozc.git --recursive
+```sh
+git clone https://github.com/google/mozc.git
 cd mozc/src
 ```
 
@@ -125,7 +123,7 @@ Hereafter you can do all the operations without changing directory.
 You should be able to build Mozc for Linux desktop as follows, assuming
 `bazelisk` is in your `$PATH`.
 
-```
+```sh
 bazelisk build package --config oss_linux --config release_build
 ```
 
@@ -182,7 +180,7 @@ If it still does not appear, confirm that `ibus-daemon` is running and that no e
 configurations. Try the following command to
 [clean Bazel's build cache](https://bazel.build/docs/user-manual#clean).
 
-```
+```sh
 bazelisk clean --expunge
 ```
 
@@ -212,13 +210,13 @@ To customize installation locations, modify [`src/config.bzl`](../src/config.bzl
 
 💡 The following command makes the specified file untracked by Git.
 
-```
+```sh
 git update-index --assume-unchanged src/config.bzl
 ```
 
 💡 This command reverts the above change.
 
-```
+```sh
 git update-index --no-assume-unchanged src/config.bzl
 ```
 
@@ -232,7 +230,7 @@ git update-index --no-assume-unchanged src/config.bzl
 
 ### Run all tests
 
-```
+```sh
 bazelisk test ... --config oss_linux --build_tests_only -c dbg
 ```
 
@@ -240,7 +238,7 @@ bazelisk test ... --config oss_linux --build_tests_only -c dbg
 
 ### Run tests under the specific directories
 
-```
+```sh
 bazelisk test base/... composer/... --config oss_linux --build_tests_only -c dbg
 ```
 
@@ -248,7 +246,7 @@ bazelisk test base/... composer/... --config oss_linux --build_tests_only -c dbg
 
 ### Run tests without the specific directories
 
-```
+```sh
 bazelisk test ... --config oss_linux --build_tests_only -c dbg -- -base/...
 ```
 
@@ -257,7 +255,7 @@ bazelisk test ... --config oss_linux --build_tests_only -c dbg -- -base/...
 
 ### Run the specific test
 
-```
+```sh
 bazelisk test base:util_test --config oss_linux -c dbg
 ```
 
@@ -269,8 +267,22 @@ bazelisk test base:util_test --config oss_linux -c dbg
 bazelisk test base:util_test --config oss_linux --test_arg=--stderrthreshold=0 --test_output=all
 ```
 
-*   The `--test_arg=--stderrthreshold=0 --test_output=all` flags shows the
+*   The `--test_arg=--stderrthreshold=0 --test_output=all` flags show the
     output of unitests to stderr.
+
+### Examples of environment-specific options
+
+#### JDK options
+
+```sh
+bazelisk test ... --java_runtime_version=remotejdk_21
+```
+
+#### C/C++ compiler options
+
+```sh
+bazelisk test ... --repo_env=CC=gcc-14 --repo_env=CXX=g++-14
+```
 
 --------------------------------------------------------------------------------
 

@@ -35,7 +35,7 @@
 #include "absl/log/check.h"
 #include "base/file/temp_dir.h"
 #include "base/file_util.h"
-#include "dictionary/file/codec_factory.h"
+#include "dictionary/file/codec.h"
 #include "dictionary/file/dictionary_file_builder.h"
 #include "testing/gmock.h"
 #include "testing/gunit.h"
@@ -52,17 +52,19 @@ TEST(DictionaryFileTest, Basic) {
   const std::string fn1 = FileUtil::JoinPath(temp_dir.path(), "/sec1");
   const std::string fn2 = FileUtil::JoinPath(temp_dir.path(), "/sec2");
 
-  FILE *fp1 = fopen(fn1.c_str(), "w");
+  FILE* fp1 = fopen(fn1.c_str(), "w");
   CHECK(fp1) << "failed to open temporary file";
   fwrite("0123456789", 10, 1, fp1);
   fclose(fp1);
-  FILE *fp2 = fopen(fn2.c_str(), "w");
+  FILE* fp2 = fopen(fn2.c_str(), "w");
   CHECK(fp2) << "failed to open temporary file";
   fwrite("9876543210", 10, 1, fp2);
   fclose(fp2);
 
+  const DictionaryFileCodec codec;
+
   {
-    DictionaryFileBuilder builder(DictionaryFileCodecFactory::GetCodec());
+    DictionaryFileBuilder builder(codec);
     EXPECT_TRUE(builder.AddSectionFromFile("sec1", fn1));
     EXPECT_TRUE(builder.AddSectionFromFile("sec2", fn2));
     EXPECT_FALSE(builder.AddSectionFromFile("sec2", fn2));
@@ -72,19 +74,17 @@ TEST(DictionaryFileTest, Basic) {
   EXPECT_OK(FileUtil::FileExists(dfn));
 
   {
-    DictionaryFile df(DictionaryFileCodecFactory::GetCodec());
+    DictionaryFile df(codec);
     ASSERT_OK(df.OpenFromFile(dfn));
-    int len;
-    const char *ptr = df.GetSection("sec1", &len);
-    EXPECT_EQ(len, 10);
-    std::string content(ptr, len);
-    EXPECT_EQ(content, "0123456789");
-    ptr = df.GetSection("sec2", &len);
-    EXPECT_EQ(len, 10);
-    content.assign(ptr, len);
-    EXPECT_EQ(content, "9876543210");
-    ptr = df.GetSection("sec3", &len);
-    EXPECT_EQ(ptr, nullptr);
+    auto data1 = df.GetSection("sec1");
+    EXPECT_EQ(data1->size(), 10);
+    EXPECT_EQ(data1.value(), "0123456789");
+    auto data2 = df.GetSection("sec2");
+    EXPECT_TRUE(data2.has_value());
+    EXPECT_EQ(data2->size(), 10);
+    EXPECT_EQ(data2.value(), "9876543210");
+    auto data3 = df.GetSection("sec3");
+    EXPECT_FALSE(data3.has_value());
   }
 
   EXPECT_OK(FileUtil::Unlink(dfn));

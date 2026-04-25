@@ -47,26 +47,26 @@ class PropertyHandler {
   // This class takes the ownership of translator, but not client.
   PropertyHandler(std::unique_ptr<MessageTranslatorInterface> translator,
                   bool is_active_on_launch,
-                  client::ClientInterface *client,
+                  client::ClientInterface* client,
                   bool toolbar_available = false);
   ~PropertyHandler();
 
   // Registers current properties into engine.
-  void Register(IbusEngineWrapper *engine);
+  void Register(IbusEngineWrapper* engine);
 
-  void ResetContentType(IbusEngineWrapper *engine);
-  void UpdateContentType(IbusEngineWrapper *engine);
+  void ResetContentType(IbusEngineWrapper* engine);
+  void UpdateContentType(IbusEngineWrapper* engine);
 
   // Update properties.
-  void Update(IbusEngineWrapper *engine, const commands::Output &output);
+  void Update(IbusEngineWrapper* engine, const commands::Output& output);
 
   // Update only internal state (is_activated_, original_composition_mode_) from
   // output, without pushing to the engine. Use when the engine is not available
   // (e.g. Direct input chosen from toolbar with no focused text field).
-  void UpdateStateFromOutput(const commands::Output &output);
+  void UpdateStateFromOutput(const commands::Output& output);
 
-  void ProcessPropertyActivate(IbusEngineWrapper *engine,
-                               const char *property_name, uint property_state);
+  void ProcessPropertyActivate(IbusEngineWrapper* engine,
+                               const char* property_name, uint property_state);
 
   // Following two methods represent two aspects of an IME state.
   // * (activated, disabled) == (false, false)
@@ -100,7 +100,7 @@ class PropertyHandler {
   void UpdateToolbarLabel(IbusEngineWrapper *engine, bool toolbar_visible);
 
  private:
-  void UpdateContentTypeImpl(IbusEngineWrapper *engine, bool disabled);
+  void UpdateContentTypeImpl(IbusEngineWrapper* engine, bool disabled);
   // Appends composition properties into panel
   void AppendCompositionPropertyToPanel();
   // Appends tool properties into panel
@@ -111,7 +111,7 @@ class PropertyHandler {
   void AppendToolbarPropertyToPanel();
   // Appends switch properties into panel
   void UpdateCompositionModeIcon(
-      IbusEngineWrapper *engine,
+      IbusEngineWrapper* engine,
       commands::CompositionMode new_composition_mode);
   void SetCompositionMode(commands::CompositionMode composition_mode);
 
@@ -121,7 +121,7 @@ class PropertyHandler {
   IbusPropertyWrapper prop_traditional_kanji_;
   IbusPropertyWrapper prop_odoriji_palette_;
   IbusPropertyWrapper prop_toolbar_;
-  client::ClientInterface *client_;
+  client::ClientInterface* client_;
   std::unique_ptr<MessageTranslatorInterface> translator_;
   commands::CompositionMode original_composition_mode_;
   bool is_activated_;

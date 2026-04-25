@@ -36,10 +36,13 @@
 #include "absl/log/check.h"
 #include "absl/log/log.h"
 #include "absl/status/status.h"
+#include "absl/strings/str_cat.h"
+#include "absl/strings/string_view.h"
 #include "absl/synchronization/mutex.h"
 #include "base/const.h"
 #include "base/environ.h"
 #include "base/file_util.h"
+#include "base/port.h"
 #include "base/singleton.h"
 
 #ifdef __ANDROID__
@@ -67,7 +70,6 @@
 
 #include <memory>  // for unique_ptr
 
-#include "absl/strings/str_cat.h"
 #include "base/win32/wide_char.h"
 #include "base/win32/win_util.h"
 #else  // _WIN32
@@ -80,6 +82,38 @@
 
 namespace mozc {
 namespace {
+
+#if defined(MOZC_SERVER_DIR)
+constexpr absl::string_view kMozcServerDir = MOZC_SERVER_DIR;
+#else  // MOZC_SERVER_DIR
+constexpr absl::string_view kMozcServerDir = "/usr/lib/mozc";
+#endif  // MOZC_SERVER_DIR
+
+#if defined(MOZC_DOCUMENT_DIR)
+constexpr absl::string_view kMozcDocumentDir = MOZC_DOCUMENT_DIR;
+#else  // MOZC_DOCUMENT_DIR
+constexpr absl::string_view kMozcDocumentDir = "/usr/lib/mozc/documents";
+#endif  // MOZC_DOCUMENT_DIR
+
+class ProgramInvocationNameHolder final {
+ public:
+  ProgramInvocationNameHolder() = default;
+  ~ProgramInvocationNameHolder() = default;
+
+  void Set(absl::string_view name) {
+    absl::MutexLock l(mutex_);
+    name_ = std::string(name);
+  }
+
+  std::string Get() const {
+    absl::MutexLock l(mutex_);
+    return name_;
+  }
+
+ private:
+  std::string name_;
+  mutable absl::Mutex mutex_;
+};
 
 class UserProfileDirectoryImpl final {
  public:
@@ -138,7 +172,7 @@ class LocalAppDataDirectoryCache {
   // Note that __try and __except does not guarantees that any destruction
   // of internal C++ objects when a non-C++ exception occurs except that
   // /EHa compiler option is specified.
-  // Since Mozc uses /EHs option in common.gypi, we must admit potential
+  // Do not use /EHs option, otherwise we must admit potential
   // memory leakes when any non-C++ exception occues in TryGetLocalAppData.
   // See http://msdn.microsoft.com/en-us/library/1deeycx5.aspx
   static HRESULT __declspec(nothrow) SafeTryGetLocalAppData(std::string* dir) {
@@ -232,92 +266,92 @@ class LocalAppDataDirectoryCache {
 #endif  // _WIN32
 
 std::string UserProfileDirectoryImpl::GetUserProfileDirectory() const {
-#if defined(OS_CHROMEOS)
-  // TODO(toka): Must use passed in user profile dir which passed in. If mojo
-  // platform the user profile is determined on runtime.
-  // It's hack, the user profile dir should be passed in. Although the value in
-  // NaCL platform is correct.
-  return "/mutable";
-
-#elif defined(__wasm__)
-  // Do nothing for WebAssembly.
-  return "";
-
-#elif defined(__ANDROID__)
-  // For android, we do nothing here because user profile directory,
-  // of which the path depends on active user,
-  // is injected from Java layer.
-  return "";
-
-#elif defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE
-  // On iOS, use Caches directory instead of Application Spport directory
-  // because the support directory doesn't exist by default.  Also, it is backed
-  // up by iTunes and iCloud.
-  return FileUtil::JoinPath({MacUtil::GetCachesDirectory(), kProductPrefix});
+  if constexpr (port::IsChromeos()) {
+    // TODO(toka): Must use passed in user profile dir which passed in. If mojo
+    // platform the user profile is determined on runtime.
+    // It's hack, the user profile dir should be passed in. Although the value
+    // in NaCL platform is correct.
+    return "/mutable";
+  } else if constexpr (port::IsWasm()) {
+    // Use a temporary directory as the data is not persisted.
+    return "/tmp";
+  } else if constexpr (port::IsAndroid()) {
+    // For android, we do nothing here because user profile directory,
+    // of which the path depends on active user,
+    // is injected from Java layer.
+    return "";
+  } else {
+#if defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE
+    // On iOS, use Caches directory instead of Application Support directory
+    // because the support directory doesn't exist by default.  Also, it is
+    // backed up by iTunes and iCloud.
+    return FileUtil::JoinPath({MacUtil::GetCachesDirectory(), kProductPrefix});
 
 #elif defined(_WIN32)
-  DCHECK(SUCCEEDED(Singleton<LocalAppDataDirectoryCache>::get()->result()));
-  std::string dir = Singleton<LocalAppDataDirectoryCache>::get()->path();
+    DCHECK(SUCCEEDED(Singleton<LocalAppDataDirectoryCache>::get()->result()));
+    std::string dir = Singleton<LocalAppDataDirectoryCache>::get()->path();
 
 #ifdef GOOGLE_JAPANESE_INPUT_BUILD
-  dir = FileUtil::JoinPath(dir, kCompanyNameInEnglish);
-  if (absl::Status s = FileUtil::CreateDirectory(dir); !s.ok()) {
-    LOG(ERROR) << s;
-  }
+    dir = FileUtil::JoinPath(dir, kCompanyNameInEnglish);
+    if (absl::Status s = FileUtil::CreateDirectory(dir); !s.ok()) {
+      LOG(ERROR) << s;
+    }
 #endif  // GOOGLE_JAPANESE_INPUT_BUILD
-  return FileUtil::JoinPath(dir, kProductNameInEnglish);
+    return FileUtil::JoinPath(dir, kProductNameInEnglish);
 
 #elif defined(TARGET_OS_OSX) && TARGET_OS_OSX
-  std::string dir = MacUtil::GetApplicationSupportDirectory();
+    std::string dir = MacUtil::GetApplicationSupportDirectory();
 #ifdef GOOGLE_JAPANESE_INPUT_BUILD
-  dir = FileUtil::JoinPath(dir, "Google");
-  // The permission of ~/Library/Application Support/Google seems to be 0755.
-  // TODO(komatsu): nice to make a wrapper function.
-  ::mkdir(dir.c_str(), 0755);
-  return FileUtil::JoinPath(dir, "JapaneseInput");
+    dir = FileUtil::JoinPath(dir, "Google");
+    // The permission of ~/Library/Application Support/Google seems to be 0755.
+    // TODO(komatsu): nice to make a wrapper function.
+    ::mkdir(dir.c_str(), 0755);
+    return FileUtil::JoinPath(dir, "JapaneseInput");
 #else   //  GOOGLE_JAPANESE_INPUT_BUILD
-  return FileUtil::JoinPath(dir, "Mozc");
+    return FileUtil::JoinPath(dir, "Mozc");
 #endif  //  GOOGLE_JAPANESE_INPUT_BUILD
 
 #elif defined(__linux__)
-  // marinaMozc uses a separate config dir so it doesn't share with stock Mozc.
+    // marinaMozc uses a separate config dir so it doesn't share with stock Mozc.
 #ifdef MARINAMOZC
-  const char* profile_dir_name = "marinamozc";
+    const char* profile_dir_name = "marinamozc";
 #else
-  const char* profile_dir_name = "mozc";
+    const char* profile_dir_name = "mozc";
 #endif
-  // 1. If "$HOME/.<profile_dir_name>" already exists,
-  //    use it for backward compatibility.
-  // 2. If $XDG_CONFIG_HOME is defined, use "$XDG_CONFIG_HOME/<profile_dir_name>".
-  // 3. Otherwise use "$HOME/.config/<profile_dir_name>"
-  // https://specifications.freedesktop.org/basedir-spec/basedir-spec-latest.html
-  const std::string home = Environ::GetEnv("HOME");
-  if (home.empty()) {
-    char buf[1024];
-    struct passwd pw, *ppw;
-    const uid_t uid = geteuid();
-    CHECK_EQ(0, getpwuid_r(uid, &pw, buf, sizeof(buf), &ppw))
-        << "Can't get passwd entry for uid " << uid << ".";
-    CHECK_LT(0, strlen(pw.pw_dir))
-        << "Home directory for uid " << uid << " is not set.";
-    return FileUtil::JoinPath(pw.pw_dir, std::string(".") + profile_dir_name);
-  }
+    // 1. If "$HOME/.<profile_dir_name>" already exists,
+    //    use it for backward compatibility.
+    // 2. If $XDG_CONFIG_HOME is defined, use "$XDG_CONFIG_HOME/<profile_dir_name>".
+    // 3. Otherwise use "$HOME/.config/<profile_dir_name>"
+    // https://specifications.freedesktop.org/basedir-spec/basedir-spec-latest.html
+    const std::string home = Environ::GetEnv("HOME");
+    if (home.empty()) {
+      char buf[1024];
+      struct passwd pw, *ppw;
+      const uid_t uid = geteuid();
+      CHECK_EQ(0, getpwuid_r(uid, &pw, buf, sizeof(buf), &ppw))
+          << "Can't get passwd entry for uid " << uid << ".";
+      CHECK_LT(0, strlen(pw.pw_dir))
+          << "Home directory for uid " << uid << " is not set.";
+      return FileUtil::JoinPath(pw.pw_dir, std::string(".") + profile_dir_name);
+    }
 
-  std::string old_dir = FileUtil::JoinPath(home, std::string(".") + profile_dir_name);
-  if (FileUtil::DirectoryExists(old_dir).ok()) {
-    return old_dir;
-  }
+    std::string old_dir = FileUtil::JoinPath(home, std::string(".") + profile_dir_name);
+    if (FileUtil::DirectoryExists(old_dir).ok()) {
+      return old_dir;
+    }
 
-  const std::string xdg_config_home = Environ::GetEnv("XDG_CONFIG_HOME");
-  if (!xdg_config_home.empty()) {
-    return FileUtil::JoinPath(xdg_config_home, profile_dir_name);
-  }
-  return FileUtil::JoinPath(home, std::string(".config/") + profile_dir_name);
+    const std::string xdg_config_home = Environ::GetEnv("XDG_CONFIG_HOME");
+    if (!xdg_config_home.empty()) {
+      return FileUtil::JoinPath(xdg_config_home, profile_dir_name);
+    }
+    return FileUtil::JoinPath(home, std::string(".config/") + profile_dir_name);
 
 #else  // Supported platforms
-#error Undefined target platform.
+    LOG(ERROR) << "Undefined target platform.";
+    return "";
 
 #endif  // Platforms
+  }
 }
 
 }  // namespace
@@ -361,7 +395,7 @@ class ProgramFilesX86Cache {
   // Note that __try and __except does not guarantees that any destruction
   // of internal C++ objects when a non-C++ exception occurs except that
   // /EHa compiler option is specified.
-  // Since Mozc uses /EHs option in common.gypi, we must admit potential
+  // Do not use /EHs option, otherwise we must admit potential
   // memory leakes when any non-C++ exception occues in TryProgramFilesPath.
   // See http://msdn.microsoft.com/en-us/library/1deeycx5.aspx
   static HRESULT __declspec(nothrow) SafeTryProgramFilesPath(
@@ -437,6 +471,10 @@ std::string GetMozcInstallDirFromRegistry() {
 #endif  // _WIN32
 
 std::string SystemUtil::GetServerDirectory() {
+  if constexpr (port::IsLinuxBase() || port::IsWasm()) {
+    return std::string(kMozcServerDir);
+  }
+
 #ifdef _WIN32
   const std::string install_dir_from_registry = GetMozcInstallDirFromRegistry();
   if (!install_dir_from_registry.empty()) {
@@ -452,21 +490,13 @@ std::string SystemUtil::GetServerDirectory() {
   return FileUtil::JoinPath(Singleton<ProgramFilesX86Cache>::get()->path(),
                             kProductNameInEnglish);
 #endif  // GOOGLE_JAPANESE_INPUT_BUILD
-#endif  // _WIN32
 
-#if defined(__APPLE__)
+#elif defined(__APPLE__)
   return MacUtil::GetServerDirectory();
-#endif  // __APPLE__
 
-#if defined(__linux__) || defined(__wasm__)
-#ifndef MOZC_SERVER_DIR
-#define MOZC_SERVER_DIR "/usr/lib/mozc"
-#endif  // MOZC_SERVER_DIR
-  return MOZC_SERVER_DIR;
-#endif  // __linux__ || __wasm__
-
-  // If none of the above platforms is specified, the compiler raises an error
-  // because of no return value.
+#else  // !_WIN32 && !__APPLE__
+  return "";
+#endif  // !_WIN32 && !__APPLE__
 }
 
 std::string SystemUtil::GetServerPath() {
@@ -497,24 +527,13 @@ std::string SystemUtil::GetToolPath() {
 }
 
 std::string SystemUtil::GetDocumentDirectory() {
-#if defined(__linux__)
-
-#ifndef MOZC_DOCUMENT_DIR
-#define MOZC_DOCUMENT_DIR "/usr/lib/mozc/documents"
-#endif  // MOZC_DOCUMENT_DIR
-  return MOZC_DOCUMENT_DIR;
-
-#elif defined(__APPLE__)
-  return GetServerDirectory();
-#else   // __linux__, __APPLE__
-  return FileUtil::JoinPath(GetServerDirectory(), "documents");
-#endif  // __linux__, __APPLE__
-}
-
-std::string SystemUtil::GetCrashReportDirectory() {
-  constexpr char kCrashReportDirectory[] = "CrashReports";
-  return FileUtil::JoinPath(SystemUtil::GetUserProfileDirectory(),
-                            kCrashReportDirectory);
+  if constexpr (port::IsLinuxBase()) {
+    return std::string(kMozcDocumentDir);
+  } else if constexpr (port::IsAppleBase()) {
+    return GetServerDirectory();
+  } else {
+    return FileUtil::JoinPath(GetServerDirectory(), "documents");
+  }
 }
 
 std::string SystemUtil::GetUserNameAsString() {
@@ -564,7 +583,7 @@ UserSidImpl::UserSidImpl() {
 
   DWORD length = 0;
   ::GetTokenInformation(htoken, TokenUser, nullptr, 0, &length);
-  std::unique_ptr<char[]> buf(new char[length]);
+  auto buf = std::make_unique<char[]>(length);
   PTOKEN_USER p_user = reinterpret_cast<PTOKEN_USER>(buf.get());
 
   if (length == 0 ||
@@ -621,7 +640,7 @@ std::string GetObjectNameAsString(HANDLE handle) {
     return "";
   }
 
-  std::unique_ptr<char[]> buf(new char[size]);
+  auto buf = std::make_unique<char[]>(size);
   DWORD return_size = 0;
   if (!::GetUserObjectInformationA(handle, UOI_NAME, buf.get(), size,
                                    &return_size)) {
@@ -851,6 +870,21 @@ uint64_t SystemUtil::GetTotalPhysicalMemory() {
 
   // If none of the above platforms is specified, the compiler raises an error
   // because of no return value.
+}
+
+void SystemUtil::SetProgramInvocationName(absl::string_view name) {
+  Singleton<ProgramInvocationNameHolder>::get()->Set(name);
+}
+
+std::string SystemUtil::GetProgramRunfilesDirectory() {
+  if constexpr (port::IsWasm()) {
+    return "/";
+  }
+  const std::string name = Singleton<ProgramInvocationNameHolder>::get()->Get();
+  if (name.empty()) {
+    return "";
+  }
+  return absl::StrCat(name, ".runfiles");
 }
 
 }  // namespace mozc

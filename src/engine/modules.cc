@@ -54,6 +54,7 @@
 #include "dictionary/user_pos.h"
 #include "engine/supplemental_model_interface.h"
 #include "prediction/suggestion_filter.h"
+#include "prediction/user_history_storage.h"
 
 
 using ::mozc::dictionary::DictionaryImpl;
@@ -111,8 +112,8 @@ absl::Status Modules::Init(std::unique_ptr<const DataManager> data_manager) {
     if (!sysdic.ok()) {
       return std::move(sysdic).status();
     }
-    auto value_dic = std::make_unique<ValueDictionary>(
-        *pos_matcher_, &(*sysdic)->value_trie());
+    auto value_dic = std::make_unique<ValueDictionary>(*pos_matcher_,
+                                                       (*sysdic)->value_trie());
     RETURN_IF_NULL(user_dictionary_);
     RETURN_IF_NULL(pos_matcher_);
     dictionary_ = std::make_unique<DictionaryImpl>(
@@ -122,13 +123,18 @@ absl::Status Modules::Init(std::unique_ptr<const DataManager> data_manager) {
   }
 
   if (!suffix_dictionary_) {
-    absl::string_view suffix_key_array_data, suffix_value_array_data;
-    absl::Span<const uint32_t> token_array;
+    absl::string_view suffix_key_array_data, suffix_value_array_data,
+        token_array_data;
     data_manager_->GetSuffixDictionaryData(
-        &suffix_key_array_data, &suffix_value_array_data, &token_array);
+        &suffix_key_array_data, &suffix_value_array_data, &token_array_data);
     suffix_dictionary_ = std::make_unique<SuffixDictionary>(
-        suffix_key_array_data, suffix_value_array_data, token_array);
+        suffix_key_array_data, suffix_value_array_data, token_array_data);
     RETURN_IF_NULL(suffix_dictionary_);
+  }
+
+  if (!user_history_storage_) {
+    user_history_storage_ = std::make_unique<prediction::UserHistoryStorage>();
+    RETURN_IF_NULL(user_history_storage_);
   }
 
   auto status_or_connector = Connector::CreateFromDataManager(*data_manager_);
@@ -190,6 +196,7 @@ absl::Status Modules::Init(std::unique_ptr<const DataManager> data_manager) {
   RETURN_IF_NULL(suffix_dictionary_);
   RETURN_IF_NULL(pos_group_);
   RETURN_IF_NULL(single_kanji_dictionary_);
+  RETURN_IF_NULL(user_history_storage_);
   RETURN_IF_NULL(supplemental_model_);
 
   return absl::Status();

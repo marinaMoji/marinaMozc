@@ -34,6 +34,7 @@
 #include <utility>
 
 #include "absl/strings/string_view.h"
+#include "base/bits.h"
 #include "base/container/serialized_string_array.h"
 #include "converter/candidate.h"
 #include "converter/segments.h"
@@ -69,9 +70,6 @@ namespace mozc {
 //   }
 class EmojiRewriter : public RewriterInterface {
  public:
-  static constexpr size_t kEmojiDataByteLength = 28;
-  using IteratorRange = std::pair<EmojiDataIterator, EmojiDataIterator>;
-
   explicit EmojiRewriter(const DataManager& data_manager);
   EmojiRewriter(const EmojiRewriter&) = delete;
   EmojiRewriter& operator=(const EmojiRewriter&) = delete;
@@ -94,21 +92,17 @@ class EmojiRewriter : public RewriterInterface {
   static bool IsEmojiCandidate(const converter::Candidate& candidate);
 
  private:
-  EmojiDataIterator begin() const {
-    return EmojiDataIterator(token_array_data_.data());
-  }
-  EmojiDataIterator end() const {
-    return EmojiDataIterator(token_array_data_.data() +
-                             token_array_data_.size());
-  }
-
   // Adds emoji candidates on each segment of given segments, if it has a
   // specific string as a key based on a dictionary.  If a segment's value is
   // "えもじ", adds all emoji candidates.
   // Returns true if emoji candidates are added in any segment.
   bool RewriteCandidates(Segments* segments) const;
 
-  IteratorRange LookUpToken(absl::string_view key) const;
+  absl::Span<const EmojiData> LookUpToken(absl::string_view key) const;
+
+  absl::Span<const EmojiData> GetEmojiTokens() const {
+    return MakeAlignedConstSpan<EmojiData>(token_array_data_);
+  }
 
   absl::string_view token_array_data_;
   SerializedStringArray string_array_;

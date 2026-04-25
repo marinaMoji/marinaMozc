@@ -68,14 +68,15 @@
 #include "converter/attribute.h"
 #include "converter/inner_segment.h"
 #include "dictionary/dictionary_interface.h"
+#include "dictionary/dictionary_token.h"
 #include "engine/modules.h"
+#include "prediction/realtime_decoder.h"
 #include "prediction/result.h"
 #include "prediction/user_history_predictor.pb.h"
 #include "prediction/user_history_storage.h"
 #include "protocol/commands.pb.h"
 #include "protocol/config.pb.h"
 #include "request/conversion_request.h"
-#include "storage/lru_cache.h"
 #include "transliteration/transliteration.h"
 
 namespace mozc::prediction {
@@ -112,15 +113,16 @@ constexpr size_t kRevertCacheSize = 16;
 constexpr absl::string_view kPunctuations[] = {"。", ".",  "、", ",",  "？",
                                                "?",  "！", "!",  "，", "．"};
 
-bool CacheInnerSegmentBoundaryEnabled(const ConversionRequest& request) {
-  return request.request()
-      .decoder_experiment_params()
-      .user_history_cache_inner_segment_boundary();
-}
-
 // Mixed conversion is enabled mainly on mobile device.
 bool IsMixedConversionEnabled(const ConversionRequest& request) {
   return request.request().mixed_conversion();
+}
+
+bool AllowPartialMatch(const ConversionRequest& request) {
+  return IsMixedConversionEnabled(request) &&
+         request.request()
+             .decoder_experiment_params()
+             .user_history_allow_partial_match();
 }
 
 bool IsZeroQuerySuggestionEnabled(const ConversionRequest& request) {
@@ -135,6 +137,14 @@ bool IsEmojiEntry(const UserHistoryPredictor::Entry& entry) {
           absl::StrContains(entry.description(), kEmojiDescription));
 }
 
+// Full sentence entry with low frequency should not be suggested.
+bool IsLowFreqFullSentenceEntry(const ConversionRequest& request,
+                                const UserHistoryPredictor::Entry& entry) {
+  return (IsMixedConversionEnabled(request) &&
+          entry.inner_segment_boundary_size() >= 2 &&
+          entry.suggestion_freq() <= 1);
+}
+
 // http://unicode.org/~scherer/emoji4unicode/snapshot/full.html
 constexpr absl::string_view kUtf8MinGooglePuaEmoji = "\xf3\xbe\x80\x80";
 constexpr absl::string_view kUtf8MaxGooglePuaEmoji = "\xf3\xbe\xba\xa0";
@@ -145,15 +155,15 @@ bool IsAndroidPuaEmoji(absl::string_view s) {
 }
 
 bool StartsWithPunctuation(absl::string_view value) {
-  return absl::c_find_if(kPunctuations, [&value](absl::string_view x) {
-           return absl::StartsWith(value, x);
-         }) != std::end(kPunctuations);
+  return absl::c_any_of(kPunctuations, [&value](absl::string_view x) {
+    return absl::StartsWith(value, x);
+  });
 }
 
 bool EndsWithPunctuation(absl::string_view value) {
-  return absl::c_find_if(kPunctuations, [&value](absl::string_view x) {
-           return absl::EndsWith(value, x);
-         }) != std::end(kPunctuations);
+  return absl::c_any_of(kPunctuations, [&value](absl::string_view x) {
+    return absl::EndsWith(value, x);
+  });
 }
 
 // Returns romanaized string.
@@ -195,8 +205,6 @@ void MaybePopulateInnerSegmentBoundary(
     const ConversionRequest& request,
     const converter::InnerSegmentBoundarySpan inner_segment_boundary,
     UserHistoryPredictor::Entry& entry) {
-  if (!CacheInnerSegmentBoundaryEnabled(request)) return;
-
   // We only populate inner_segment_boundary when
   // non-empty inner_segment_boundary is passed.
   if (inner_segment_boundary.empty()) return;
@@ -213,8 +221,6 @@ void MaybePopulateInnerSegmentBoundary(
 void AppendInnerBoundary(const ConversionRequest& request,
                          converter::InnerSegmentBoundaryBuilder& builder,
                          const UserHistoryPredictor::Entry& entry) {
-  if (!CacheInnerSegmentBoundaryEnabled(request)) return;
-
   if (entry.inner_segment_boundary_size() > 0) {
     // Directly copies the raw encoded value.
     for (const uint32_t encoded : entry.inner_segment_boundary()) {
@@ -225,6 +231,14 @@ void AppendInnerBoundary(const ConversionRequest& request,
     builder.Add(entry.key().size(), entry.value().size(), entry.key().size(),
                 entry.value().size());
   }
+}
+
+void SetAttribute(UserHistoryPredictor::Entry& entry, uint32_t v) {
+  entry.set_attributes(entry.attributes() | v);
+}
+
+void RemoveAttribute(UserHistoryPredictor::Entry& entry, uint32_t v) {
+  entry.set_attributes(entry.attributes() & ~v);
 }
 
 }  // namespace
@@ -308,11 +322,14 @@ UserHistoryPredictor::EntryPriorityQueue::NewEntry() {
   return pool_.Alloc();
 }
 
-UserHistoryPredictor::UserHistoryPredictor(const engine::Modules& modules)
+UserHistoryPredictor::UserHistoryPredictor(const engine::Modules& modules,
+                                           const RealtimeDecoder& decoder)
     : dictionary_(modules.GetDictionary()),
       user_dictionary_(modules.GetUserDictionary()),
       modules_(modules),
-      revert_cache_(kRevertCacheSize) {}
+      storage_(modules_.GetUserHistoryStorage()),
+      revert_cache_(kRevertCacheSize),
+      decoder_(decoder) {}
 
 UserHistoryPredictor::~UserHistoryPredictor() = default;
 
@@ -508,6 +525,24 @@ bool UserHistoryPredictor::RemoveEntryWithInnerSegment(absl::string_view key,
 bool UserHistoryPredictor::ClearHistoryEntry(absl::string_view key,
                                              absl::string_view value) {
   bool deleted = false;
+
+  // The stored data uses the kPrefixZeroSpace for the prefix space, so
+  // we replace the prefix space with kPrefixZeroSpace.
+  std::string normalized_key, normalized_value;
+  auto maybe_normalize_prefix_space =
+      [](absl::string_view str, std::string& buffer) -> absl::string_view {
+    for (absl::string_view space : {kPrefixFullSpace, kPrefixHalfSpace}) {
+      if (absl::StartsWith(str, space)) {
+        buffer = absl::StrCat(kPrefixZeroSpace, str.substr(space.size()));
+        return buffer;
+      }
+    }
+    return str;
+  };
+
+  key = maybe_normalize_prefix_space(key, normalized_key);
+  value = maybe_normalize_prefix_space(value, normalized_value);
+
   {
     // Finds the history entry that has the exactly same key and value and has
     // not been removed yet. If exists, remove it.
@@ -727,7 +762,7 @@ bool UserHistoryPredictor::ZeroQueryLookupEntry(
     *result = entry;
     result->set_key(std::move(key));
     result->set_value(std::move(value));
-    result->set_bigram_boost(true);
+    SetAttribute(*result, Attribute::BIGRAM_BOOST);
     entry_queue.Push(result);
     return true;
   }
@@ -749,7 +784,7 @@ bool UserHistoryPredictor::RomanFuzzyLookupEntry(
   Entry* result = entry_queue.NewEntry();
   DCHECK(result);
   *result = entry;
-  result->set_spelling_correction(true);
+  SetAttribute(*result, Attribute::SPELLING_CORRECTION);
   entry_queue.Push(result);
 
   return true;
@@ -903,6 +938,182 @@ bool UserHistoryPredictor::GetKeyValueForExactAndRightPrefixMatch(
   return true;
 }
 
+bool UserHistoryPredictor::GetKeyValueForPartialMatch(
+    const ConversionRequest& request, absl::string_view request_key,
+    const Entry& entry, std::string& result_key, std::string& result_value,
+    uint32_t& result_attribute,
+    converter::InnerSegmentBoundary& result_inner_segment_boundary,
+    EntryPriorityQueue& entry_queue) const {
+  if (!AllowPartialMatch(request) ||
+      !absl::StartsWith(request_key, entry.key()) ||
+      entry.key().size() >= request_key.size()) {
+    return false;
+  }
+
+  // Records all partial match entries to keep track of LRU order of
+  // partial matches.
+  entry_queue.RecordPartialEntry(entry);
+
+  if (!entry.allow_partial_match()) {
+    return false;
+  }
+
+  absl::string_view suffix = request_key.substr(entry.key().size());
+
+  // Do not allow too long suffix.
+  static constexpr int kMaxSuffixLen = 10;
+  if (Util::CharsLen(suffix) > kMaxSuffixLen) {
+    return false;
+  }
+
+  // disallowed_count: partial match, but not a proper noun.
+  //    allowed_count: partial match, proper noun.
+  const auto [disallowed_count, allowed_count] =
+      entry_queue.GetPartialCount(entry.key());
+
+  // Do not allow too many partial matches to reduce the call of DecodeSuffix.
+  static constexpr int kPartialMatchSize = 3;
+  if (allowed_count > kPartialMatchSize) {
+    return false;
+  }
+
+  // To follow the LRU principle, avoid promoting partial match candidates
+  // if there is partial matches of general nouns.
+  if (disallowed_count > 0) {
+    result_attribute |= Attribute::WEAK_CANDIDATE;
+  }
+
+  // Safe to assume that the suffix is personal name.
+  // Adding personal name suffix to general proper noun is generally safe.
+  // e.g., Adding "氏" rather than "市".
+  const uint16_t first_name_id = modules_.GetPosMatcher().GetFirstNameId();
+
+  auto full_result_opt = decoder_.DecodeSuffix(request, 0, request_key);
+  auto suffix_result_opt =
+      decoder_.DecodeSuffix(request, first_name_id, suffix);
+
+  // Failed to decode suffix.
+  if (!full_result_opt || !suffix_result_opt) {
+    return false;
+  }
+
+  Result full_result = std::move(full_result_opt.value());
+  Result suffix_result = std::move(suffix_result_opt.value());
+
+  // Full result include the prefix-penalty cost and transition cost from BOS.
+  // Adds them to the suffix_result.
+  suffix_result.cost += modules_.GetSegmenter().GetPrefixPenalty(first_name_id);
+  suffix_result.cost +=
+      modules_.GetConnector().GetTransitionCost(0, first_name_id);
+
+  // Returns true if the suffix_result.value ends at the boundary between
+  // content word and functional word in full_result, and remaining
+  // suffix is exactly the same.
+  // e.g.,
+  // [full=量|が, prefix=涼, suffix=が] => OK
+  // [full=携帯,  prefix=慶太, suffix=い] => NG
+  // [full=量|が行った,  prefix=涼, suffix=が言った] => NG (suffix is different)
+  auto is_valid_suffix = [&]() {
+    std::string_view value = full_result.value;
+    for (const auto& iter : full_result.inner_segments()) {
+      value.remove_prefix(iter.GetContentValue().size());
+      if (value.empty()) return false;
+      if (value == suffix_result.value) return true;
+      value.remove_prefix(iter.GetFunctionalValue().size());
+    }
+    return false;
+  };
+
+  const commands::DecoderExperimentParams& params =
+      request.request().decoder_experiment_params();
+  const int prefix_wcost = params.user_history_partial_prefix_wcost();
+  const int weak_prefix_wcost = params.user_history_partial_weak_prefix_wcost();
+
+  if (suffix_result.cost + prefix_wcost <= full_result.cost ||
+      is_valid_suffix()) {
+    // OK to use this candidate.
+  } else if (suffix_result.cost + weak_prefix_wcost <= full_result.cost) {
+    // OK, but ranked lower.
+    result_attribute |= Attribute::WEAK_CANDIDATE;
+  } else {
+    return false;
+  }
+
+  result_key = absl::StrCat(entry.key(), suffix_result.key);
+  result_value = absl::StrCat(entry.value(), suffix_result.value);
+  result_attribute |= Attribute::POPULATE_INNER_SEGMENT_BOUNDARY;
+
+  // For candidates that have never been input before, e.g. partial match
+  // candidates, they are treated as standard conversions and their boundary
+  // information is populated to the Result.
+  result_inner_segment_boundary = [&]() {
+    converter::InnerSegmentBoundaryBuilder inner_segment_boundary_builder;
+    bool is_first = true;
+    for (const auto& iter : suffix_result.inner_segments()) {
+      if (is_first) {
+        is_first = false;
+        if (modules_.GetPosMatcher().IsFunctional(suffix_result.lid) &&
+            iter.GetFunctionalKey().empty() &&
+            iter.GetFunctionalValue().empty()) {
+          // If the first element is a functional word, merge it into `entry`.
+          inner_segment_boundary_builder.Add(
+              entry.key().size() + iter.GetKey().size(),
+              entry.value().size() + iter.GetValue().size(), entry.key().size(),
+              entry.value().size());
+        } else {
+          // If the first element is a content word, treat `entry` and this
+          // element as independent segments.
+          inner_segment_boundary_builder.Add(
+              entry.key().size(), entry.value().size(), entry.key().size(),
+              entry.value().size());
+          inner_segment_boundary_builder.Add(iter);
+        }
+      } else {
+        inner_segment_boundary_builder.Add(iter);
+      }
+    }
+
+    return inner_segment_boundary_builder.Build(result_key, result_value);
+  }();
+
+  return true;
+}
+
+// static
+bool UserHistoryPredictor::AllowLowFreqFullSentenceEntryMatch(
+    const ConversionRequest& request, absl::string_view request_key,
+    const UserHistoryPredictor::MatchType mtype, const Entry& entry) {
+  // The flag is named `user_history_allow_exact_match`, but it will also
+  // include prefix matching under specific conditions. This affects how
+  // full-sentence entries with a low frequency are utilized. This is an
+  // experimental flag and is removed in the future.
+  if (!IsMixedConversionEnabled(request) ||
+      !request.request()
+           .decoder_experiment_params()
+           .user_history_allow_exact_match()) {
+    return false;
+  }
+
+  // exact match.
+  if (mtype == MatchType::EXACT_MATCH) {
+    return true;
+  }
+
+  // prefix match.
+  if (mtype == MatchType::LEFT_PREFIX_MATCH) {
+    const converter::InnerSegments inner_segments(
+        entry.key(), entry.value(), entry.inner_segment_boundary());
+    // Returns true only when request_key reaches the key of the last segment.
+    // key="わたしのな", entry="わたしの|なまえ" => OK
+    // key="わたしの",   entry="わたしの|なまえ" => NG
+    return inner_segments
+               .GetPrefixKeyAndValue(entry.inner_segment_boundary_size() - 1)
+               .first.size() < request_key.size();
+  }
+
+  return false;
+}
+
 bool UserHistoryPredictor::LookupEntry(
     const ConversionRequest& request, absl::string_view request_key,
     absl::string_view key_base,
@@ -933,6 +1144,13 @@ bool UserHistoryPredictor::LookupEntry(
       GetMatchTypeFromInput(request_key, key_base, key_expanded, entry.key());
 
   if (mtype == MatchType::NO_MATCH) {
+    return false;
+  }
+
+  // Full sentence with low frequency is suppressed unless
+  // AllowLowFreqFullSentenceEntryMatch() returns true.
+  if (IsLowFreqFullSentenceEntry(request, entry) &&
+      !AllowLowFreqFullSentenceEntryMatch(request, request_key, mtype, entry)) {
     return false;
   }
 
@@ -969,14 +1187,20 @@ bool UserHistoryPredictor::LookupEntry(
       // target entry gets longer than request_key.
       // e.g., |request_key|="foobar", |entry.key()|="foo"
       std::string key, value;
+      uint32_t result_attribute = 0;
       converter::InnerSegmentBoundary inner_segment_boundary;
+
       if (GetKeyValueForExactAndRightPrefixMatch(
               request, request_key, prefer_exact_match, entry, last_entry,
               left_last_access_time, left_most_last_access_time, key, value,
-              inner_segment_boundary)) {
+              inner_segment_boundary) ||
+          GetKeyValueForPartialMatch(request, request_key, entry, key, value,
+                                     result_attribute, inner_segment_boundary,
+                                     entry_queue)) {
         result =
             AddEntryWithNewKeyValue(request, std::move(key), std::move(value),
                                     inner_segment_boundary, entry, entry_queue);
+        SetAttribute(*result, result_attribute);
       }
       break;
     }
@@ -1013,7 +1237,7 @@ bool UserHistoryPredictor::LookupEntry(
 
   // If prev entry is not nullptr, check whether there is a bigram
   // from |prev_entry| to |entry|.
-  result->set_bigram_boost(false);
+  RemoveAttribute(*result, Attribute::BIGRAM_BOOST);
 
   if (prev_entry != nullptr) {
     if (mtype == MatchType::LEFT_EMPTY_MATCH) {
@@ -1035,12 +1259,13 @@ bool UserHistoryPredictor::LookupEntry(
         constexpr uint32_t kBigramLinkAsTime = 10;
         result->set_last_access_time(prev_entry->last_access_time() +
                                      kBigramLinkAsTime * order.value());
-        result->set_bigram_boost(true);
+        SetAttribute(*result, Attribute::BIGRAM_BOOST);
       }
     } else {
       // Sets bigram_boost flag so that this entry is boosted
       // against LRU policy.
-      result->set_bigram_boost(HasBigramEntry(entry, *prev_entry));
+      if (HasBigramEntry(entry, *prev_entry))
+        SetAttribute(*result, Attribute::BIGRAM_BOOST);
     }
   }
 
@@ -1115,13 +1340,18 @@ bool UserHistoryPredictor::LookupEntry(
 
 std::vector<Result> UserHistoryPredictor::Predict(
     const ConversionRequest& request) const {
-  MaybeProcessPartialRevertEntry(request);
+  const bool is_empty_input = request.key().empty();
+  // Workaround for b/499745591
+  // Predict() may be triggered when BS key is pressed, which is not expected.
+  // Need to call MaybeProcessPartialRevertEntry when the new input has started.
+  if (!is_empty_input) {
+    MaybeProcessPartialRevertEntry(request);
+  }
 
   if (!ShouldPredict(request)) {
     return {};
   }
 
-  const bool is_empty_input = request.key().empty();
   ConstEntrySnapshot prev_entry = LookupPrevEntry(request);
   if (is_empty_input && !prev_entry) {
     MOZC_VLOG(1) << "If request_key_len is 0, prev_entry must be set";
@@ -1133,20 +1363,21 @@ std::vector<Result> UserHistoryPredictor::Predict(
   const bool is_zero_query =
       IsZeroQuerySuggestionEnabled(request) && is_empty_input;
   size_t max_prediction_size =
-      request.max_user_history_prediction_candidates_size();
+      request.options().max_user_history_prediction_candidates_size;
   size_t max_prediction_char_coverage =
       params.user_history_prediction_max_char_coverage();
 
   if (is_zero_query) {
     max_prediction_size =
-        request.max_user_history_prediction_candidates_size_for_zero_query();
+        request.options()
+            .max_user_history_prediction_candidates_size_for_zero_query;
   } else if (max_prediction_char_coverage > 0) {
     // When char coverage feature is enabled,
     // set a fixed value so that we can enumerate enough candidates.
     max_prediction_size = 3;
   }
 
-  EntryPriorityQueue entry_queue = GetEntry_QueueFromHistoryDictionary(
+  EntryPriorityQueue entry_queue = CreateEntryQueueFromHistory(
       request, prev_entry.get(), max_prediction_size * 5);
 
   if (entry_queue.size() == 0) {
@@ -1258,7 +1489,7 @@ UserHistoryPredictor::ConstEntrySnapshot UserHistoryPredictor::LookupPrevEntry(
 }
 
 UserHistoryPredictor::EntryPriorityQueue
-UserHistoryPredictor::GetEntry_QueueFromHistoryDictionary(
+UserHistoryPredictor::CreateEntryQueueFromHistory(
     const ConversionRequest& request, const Entry* prev_entry,
     size_t max_entry_queue_size) const {
   // Gets romanized input key if the given preedit looks misspelled.
@@ -1294,15 +1525,6 @@ UserHistoryPredictor::GetEntry_QueueFromHistoryDictionary(
       return false;
     }
 
-    // full sentence entry is not reused as history now.
-    // TODO(taku): reuse it in exact-match case.
-    if (CacheInnerSegmentBoundaryEnabled(request) &&
-        IsMixedConversionEnabled(request) &&
-        entry.inner_segment_boundary_size() >= 2 &&
-        entry.suggestion_freq() <= 1) {
-      return true;
-    }
-
     if (!IsValidEntryIgnoringRemovedField(entry)) {
       return true;
     }
@@ -1310,8 +1532,18 @@ UserHistoryPredictor::GetEntry_QueueFromHistoryDictionary(
     // Lookup key from elm_value and prev_entry.
     // If a new entry is found, the entry is pushed to the entry_queue.
     if (LookupEntry(request, request_key, base_key, expanded.get(), entry,
-                    prev_entry, entry_queue) ||
-        RomanFuzzyLookupEntry(roman_request_key, entry, entry_queue) ||
+                    prev_entry, entry_queue)) {
+      return true;
+    }
+
+    // Full sentence entry is not reused in non-standard lookup, e.g.
+    // RomanFuzzy, ZeroQuery, and Typing correction.
+    if (IsLowFreqFullSentenceEntry(request, entry)) {
+      return true;
+    }
+
+    // Non-standard lookup.
+    if (RomanFuzzyLookupEntry(roman_request_key, entry, entry_queue) ||
         ZeroQueryLookupEntry(request, request_key, entry, prev_entry,
                              entry_queue)) {
       return true;
@@ -1430,9 +1662,9 @@ std::vector<Result> UserHistoryPredictor::MakeResults(
   };
 
   auto is_redandant_entry = [&](const Entry& entry) {
-    return absl::c_find_if(entries, [&](const Entry* inserted_entry) {
-             return is_redandant(entry.value(), inserted_entry->value());
-           }) != entries.end();
+    return absl::c_any_of(entries, [&](const Entry* inserted_entry) {
+      return is_redandant(entry.value(), inserted_entry->value());
+    });
   };
 
   // Replace `entry` with the one entry in `entries`.
@@ -1497,12 +1729,23 @@ std::vector<Result> UserHistoryPredictor::MakeResults(
     // as this information may introduce unexpected side-effect during the
     // the training. Inner segment information should only be fed from
     // the realtime decoder.
-    if (result_entry->spelling_correction()) {
+    if (result_entry->attributes() &
+        Attribute::POPULATE_INNER_SEGMENT_BOUNDARY) {
+      // POPULATE_INNER_SEGMENT_BOUNDARY is set when the `result_entry` is
+      // `generated` by the decoder.
+      absl::c_copy(result_entry->inner_segment_boundary(),
+                   std::back_inserter(result.inner_segment_boundary));
+    }
+    if (result_entry->attributes() & Attribute::SPELLING_CORRECTION) {
       result.candidate_attributes |= converter::Attribute::SPELLING_CORRECTION;
     }
-    if (result_entry->bigram_boost()) {
+    if (result_entry->attributes() & Attribute::WEAK_CANDIDATE) {
+      result.types |= prediction::WEAK_USER_HISTORY_PREDICTION;
+    }
+    if (result_entry->attributes() & Attribute::BIGRAM_BOOST) {
       result.types |= prediction::BIGRAM;
     }
+
     absl::string_view description = result_entry->description();
     // If we have stored description, set it exactly.
     if (!description.empty()) {
@@ -1561,7 +1804,7 @@ bool UserHistoryPredictor::IsValidEntryIgnoringRemovedField(
     return false;
   }
 
-  if (entry.key().ends_with(" ")) {
+  if (entry.key().ends_with(' ')) {
     // Invalid user history entry from alphanumeric input.
     return false;
   }
@@ -1574,7 +1817,8 @@ void UserHistoryPredictor::Insert(
     absl::string_view key, absl::string_view value,
     absl::string_view description,
     converter::InnerSegmentBoundarySpan inner_segment_boundary,
-    absl::Span<const uint64_t> next_fps, uint64_t last_access_time,
+    absl::Span<const uint64_t> next_fps, bool allow_partial_match,
+    uint64_t last_access_time,
     UserHistoryPredictor::RevertEntries& revert_entries) {
   // b/279560433: Preprocess key value
   // (key|value)_begin don't change after StripTrailingAsciiWhitespace.
@@ -1618,6 +1862,9 @@ void UserHistoryPredictor::Insert(
   entry->set_key(key);
   entry->set_value(value);
   entry->set_removed(false);
+  entry->clear_attributes();
+
+  if (allow_partial_match) entry->set_allow_partial_match(true);
 
   if (description.empty()) {
     entry->clear_description();
@@ -1722,9 +1969,7 @@ void UserHistoryPredictor::Finish(const ConversionRequest& request,
 
   if (!revert_entries.entries.empty()) {
     revert_entries.result = results.front();
-    if (auto* element = revert_cache_.Insert(revert_id); element) {
-      element->value = std::move(revert_entries);
-    }
+    revert_cache_.Insert(revert_id, std::move(revert_entries));
   }
 }
 
@@ -1814,6 +2059,7 @@ UserHistoryPredictor::MakeLearningSegments(
       make_history_learning_segments(request.history_result());
   learning_segments.conversion_segments = make_learning_segments(result);
   learning_segments.inner_segment_boundary = result.inner_segment_boundary;
+  learning_segments.allow_partial_match = IsProperNoun(request, result);
 
   return learning_segments;
 }
@@ -1899,6 +2145,7 @@ void UserHistoryPredictor::InsertHistoryForHistorySegments(
       const std::string value =
           absl::StrCat(kPrefixZeroSpace, conversion_segment.value);
       Insert(request, 0, 0, key, value, "", {}, {}, last_access_time,
+             false, /* allow_partial_match */
              revert_entries);
       InsertNextEntry(UserHistoryStorage::Fingerprint(key, value),
                       *history_entry);
@@ -1917,13 +2164,12 @@ void UserHistoryPredictor::InsertHistoryForConversionSegments(
     UserHistoryPredictor::RevertEntries& revert_entries) {
   // Inserts all_key/all_value.
   // We don't insert it for mobile.
-  if ((CacheInnerSegmentBoundaryEnabled(request) ||
-       !IsMixedConversionEnabled(request)) &&
-      learning_segments.conversion_segments.size() > 1) {
+  if (learning_segments.conversion_segments.size() > 1) {
     Insert(request, 0, 0, learning_segments.conversion_segments_key,
            learning_segments.conversion_segments_value, "",
-           learning_segments.inner_segment_boundary, {}, last_access_time,
-           revert_entries);
+           learning_segments.inner_segment_boundary, {},
+           false, /* allow_partial_match */
+           last_access_time, revert_entries);
   }
 
   absl::flat_hash_set<std::vector<uint64_t>> seen;
@@ -1956,21 +2202,28 @@ void UserHistoryPredictor::InsertHistoryForConversionSegments(
       this_was_seen = false;
     }
 
+    const bool has_content_kv = segment.content_key != segment.key &&
+                                segment.content_value != segment.value;
+
     converter::InnerSegmentBoundary inner_segment_boundary;
-    if (segment.content_key != segment.key &&
-        segment.content_value != segment.value) {
+    if (has_content_kv) {
+      const bool allow_partial_match =
+          (i == 0 && learning_segments.allow_partial_match);
       inner_segment_boundary = converter::BuildInnerSegmentBoundary(
           {{segment.key.size(), segment.value.size(),
             segment.content_key.size(), segment.content_value.size()}},
           segment.key, segment.value);
       Insert(request, segment.key_begin, segment.value_begin,
              segment.content_key, segment.content_value, segment.description,
-             {}, {}, last_access_time, revert_entries);
+             {}, {}, allow_partial_match, last_access_time, revert_entries);
     }
 
+    const bool allow_partial_match =
+        (i == 0 && learning_segments.allow_partial_match && !has_content_kv);
     Insert(request, segment.key_begin, segment.value_begin, segment.key,
            segment.value, segment.description, inner_segment_boundary,
-           next_fps_to_set, last_access_time, revert_entries);
+           next_fps_to_set, allow_partial_match, last_access_time,
+           revert_entries);
   }
 }
 
@@ -1980,22 +2233,21 @@ void UserHistoryPredictor::Revert(uint32_t revert_id) {
     return;
   }
 
-  const RevertEntries* revert_entries =
-      revert_cache_.LookupWithoutInsert(revert_id);
-  if (!revert_entries) {
+  RevertEntries revert_entries;
+  if (!revert_cache_.Lookup(revert_id, &revert_entries)) {
     return;
   }
 
   // `last_committed_entries` keeps the original entries before Revert.
   auto last_committed_entries = std::make_shared<RevertEntries>();
 
-  // `revert_entries->entries` store the entries before the commit,
+  // `revert_entries.entries` store the entries before the commit,
   // while `last_committed_entries->entries` will store the entries after the
   // commit.
-  last_committed_entries->result = revert_entries->result;
+  last_committed_entries->result = revert_entries.result;
 
   for (const auto& [key_begin, value_begin, revert_entry] :
-       revert_entries->entries) {
+       revert_entries.entries) {
     // We do not explicitly remove the entry from the `dic_`, but simply
     // rollback to the previous entry. This behavior is consistent with the
     // partial-revert operation. Entry with zero frequency is not suggested in
@@ -2016,8 +2268,8 @@ void UserHistoryPredictor::Revert(uint32_t revert_id) {
 
   // History entry may have the next_entry link.
   // We have to revert these links.
-  if (revert_entries->history_entry.has_value()) {
-    const Entry& revert_history_entry = revert_entries->history_entry.value();
+  if (revert_entries.history_entry.has_value()) {
+    const Entry& revert_history_entry = revert_entries.history_entry.value();
     if (EntrySnapshot committed_history_entry =
             storage_.MutableLookup(revert_history_entry);
         committed_history_entry) {
@@ -2141,7 +2393,8 @@ std::vector<uint64_t> UserHistoryPredictor::LearningSegmentFingerprints(
 uint32_t UserHistoryPredictor::GetScore(const Entry& entry) {
   constexpr uint32_t kBigramBoostAsTime = 7 * 24 * 60 * 60;  // 1 week.
   return entry.last_access_time() - Util::CharsLen(entry.value()) +
-         (entry.bigram_boost() ? kBigramBoostAsTime : 0);
+         ((entry.attributes() & Attribute::BIGRAM_BOOST) ? kBigramBoostAsTime
+                                                         : 0);
 }
 
 // static
@@ -2178,6 +2431,41 @@ int32_t UserHistoryPredictor::GuessRevertedValueOffset(
   }
 
   return 0;
+}
+
+bool UserHistoryPredictor::IsProperNoun(const ConversionRequest& request,
+                                        const Result& result) const {
+  // Too short input.
+  if (Util::CharsLen(result.key) <= 1) return false;
+
+  const auto& pos_matcher = modules_.GetPosMatcher();
+
+  // Returns true if there is proper noun entry with `request_key`.
+  auto is_proper_noun_key_in_dic = [&](absl::string_view request_key) {
+    bool found = false;
+    dictionary::InlineCallback cb;
+    cb.OnToken([&](absl::string_view key, absl::string_view value,
+                   const dictionary::Token& token) {
+      if (pos_matcher.IsUniqueNoun(token.lid) ||
+          pos_matcher.IsUniqueNoun(token.rid)) {
+        found = true;
+        return dictionary::InlineCallback::TRAVERSE_DONE;
+      }
+      return dictionary::InlineCallback::TRAVERSE_CONTINUE;
+    });
+    modules_.GetDictionary().LookupExact(request_key, request, &cb);
+    return found;
+  };
+
+  const Util::ScriptType stype = Util::GetScriptType(result.value);
+  // Heuristically detect whether the prefix value is a proper noun.
+  return (stype == Util::KATAKANA || stype == Util::NUMBER ||
+          stype == Util::ALPHABET ||                  // Unusual script type
+          result.types & prediction::SINGLE_KANJI ||  // Single kanji
+          result.types & prediction::NUMBER ||        // Number
+          pos_matcher.IsUniqueNoun(result.lid) ||     // proper noun POS
+          pos_matcher.IsUniqueNoun(result.rid) ||
+          (stype == Util::KANJI && is_proper_noun_key_in_dic(result.key)));
 }
 
 // Example

@@ -60,6 +60,7 @@
 #include "dictionary/pos_matcher.h"
 #include "protocol/config.pb.h"
 #include "request/conversion_request.h"
+#include "rewriter/rewriter_interface.h"
 #include "rewriter/variants_rewriter.h"
 #include "storage/lru_storage.h"
 #include "transliteration/transliteration.h"
@@ -701,7 +702,7 @@ bool UserSegmentHistoryRewriter::IsAvailable(const ConversionRequest& request,
     return false;
   }
 
-  if (!request.enable_user_history_for_conversion()) {
+  if (!request.options().enable_user_history_for_conversion) {
     MOZC_VLOG(2) << "user history for conversion is disabled";
     return false;
   }
@@ -717,6 +718,11 @@ bool UserSegmentHistoryRewriter::IsAvailable(const ConversionRequest& request,
       LOG(ERROR) << "candidate size is 0";
       return false;
     }
+  }
+
+  if (DisableLaegacyRewriterInMixedConversion(request,
+                                              kDisableUserSegmentHistory)) {
+    return false;
   }
 
   return true;

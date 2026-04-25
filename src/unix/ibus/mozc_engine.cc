@@ -87,14 +87,14 @@ constexpr char kMozcDefaultUILocale[] = "en_US.UTF-8";
 // for every 5 minutes, call SyncData
 const absl::Duration kSyncDataInterval = absl::Minutes(5);
 
-const char *kUILocaleEnvNames[] = {
+const char* kUILocaleEnvNames[] = {
     "LC_ALL",
     "LC_MESSAGES",
     "LANG",
 };
 
-std::string GetEnv(const char *envname) {
-  const char *result = ::getenv(envname);
+std::string GetEnv(const char* envname) {
+  const char* result = ::getenv(envname);
   return result != nullptr ? std::string(result) : "";
 }
 
@@ -116,7 +116,7 @@ struct SurroundingTextInfo {
   std::string following_text;
 };
 
-bool GetSurroundingText(IbusEngineWrapper *engine, SurroundingTextInfo *info) {
+bool GetSurroundingText(IbusEngineWrapper* engine, SurroundingTextInfo* info) {
   if (!(engine->CheckCapabilities(IBUS_CAP_SURROUNDING_TEXT))) {
     MOZC_VLOG(1) << "Give up CONVERT_REVERSE due to client_capabilities: "
                  << engine->GetCapabilities();
@@ -175,7 +175,7 @@ std::unique_ptr<client::ClientInterface> CreateAndConfigureClient() {
 }
 
 std::optional<absl::string_view> GetMapValue(
-    const absl::flat_hash_map<std::string, std::string> &map,
+    const absl::flat_hash_map<std::string, std::string>& map,
     absl::string_view key) {
   absl::flat_hash_map<std::string, std::string>::const_iterator it =
       map.find(key);
@@ -186,12 +186,12 @@ std::optional<absl::string_view> GetMapValue(
 }
 
 bool IsWaylandSession(
-    const absl::flat_hash_map<std::string, std::string> &env) {
+    const absl::flat_hash_map<std::string, std::string>& env) {
   return env.contains("WAYLAND_DISPLAY");
 }
 
 std::vector<std::string> GetCurrentDesktops(
-    const absl::flat_hash_map<std::string, std::string> &env) {
+    const absl::flat_hash_map<std::string, std::string>& env) {
   const std::optional<absl::string_view> env_xdg_current_desktop =
       GetMapValue(env, "XDG_CURRENT_DESKTOP");
   if (!env_xdg_current_desktop.has_value()) {
@@ -202,16 +202,16 @@ std::vector<std::string> GetCurrentDesktops(
   return absl::StrSplit(env_xdg_current_desktop.value(), ':');
 }
 
-void UpdateEnvironMap(absl::flat_hash_map<std::string, std::string> &env,
-                      const char *envname) {
-  const char *result = ::getenv(envname);
+void UpdateEnvironMap(absl::flat_hash_map<std::string, std::string>& env,
+                      const char* envname) {
+  const char* result = ::getenv(envname);
   if (result == nullptr) {
     return;
   }
   env.insert_or_assign(envname, result);
 }
 
-bool UseMozcCandidateWindow(const IbusConfig &ibus_config) {
+bool UseMozcCandidateWindow(const IbusConfig& ibus_config) {
   if (!absl::GetFlag(FLAGS_use_mozc_renderer)) {
     return false;
   }
@@ -262,7 +262,7 @@ MozcEngine::MozcEngine()
 
 MozcEngine::~MozcEngine() { SyncData(true); }
 
-void MozcEngine::CandidateClicked(IbusEngineWrapper *engine, uint index,
+void MozcEngine::CandidateClicked(IbusEngineWrapper* engine, uint index,
                                   uint button, uint state) {
   if (index >= unique_candidate_ids_.size()) {
     return;
@@ -279,15 +279,15 @@ void MozcEngine::CandidateClicked(IbusEngineWrapper *engine, uint index,
   UpdateAll(engine, output);
 }
 
-void MozcEngine::CursorDown(IbusEngineWrapper *engine) {
+void MozcEngine::CursorDown(IbusEngineWrapper* engine) {
   // TODO(mazda): Implement this.
 }
 
-void MozcEngine::CursorUp(IbusEngineWrapper *engine) {
+void MozcEngine::CursorUp(IbusEngineWrapper* engine) {
   // TODO(mazda): Implement this.
 }
 
-void MozcEngine::Disable(IbusEngineWrapper *engine) {
+void MozcEngine::Disable(IbusEngineWrapper* engine) {
   if (MozcToolbarAvailable()) {
     MozcToolbarHide();
   }
@@ -321,7 +321,7 @@ commands::CompositionMode ConvertCompositionMode(
 }
 }  // namespace
 
-void MozcEngine::Enable(IbusEngineWrapper *engine) {
+void MozcEngine::Enable(IbusEngineWrapper* engine) {
   // Launch mozc_server
   client_->EnsureConnection();
   UpdatePreeditMethod();
@@ -355,7 +355,7 @@ void MozcEngine::Enable(IbusEngineWrapper *engine) {
   }
 }
 
-void MozcEngine::FocusIn(IbusEngineWrapper *engine) {
+void MozcEngine::FocusIn(IbusEngineWrapper* engine) {
   current_engine_ = engine->GetEngine();
   property_handler_->Register(engine);
   if (MozcToolbarAvailable()) {
@@ -367,7 +367,7 @@ void MozcEngine::FocusIn(IbusEngineWrapper *engine) {
   }
 }
 
-void MozcEngine::FocusOut(IbusEngineWrapper *engine) {
+void MozcEngine::FocusOut(IbusEngineWrapper* engine) {
   if (MozcToolbarAvailable()) {
     // Always hide toolbar when engine loses focus (e.g. switching to another IME).
     MozcToolbarScheduleHideDelayed(150);
@@ -386,17 +386,17 @@ void MozcEngine::FocusOut(IbusEngineWrapper *engine) {
   SyncData(false);
 }
 
-void MozcEngine::PageDown(IbusEngineWrapper *engine) {
+void MozcEngine::PageDown(IbusEngineWrapper* engine) {
   // TODO(mazda,yusukes): Implement this to support arrow icons inside the Gtk+
   // candidate window.
 }
 
-void MozcEngine::PageUp(IbusEngineWrapper *engine) {
+void MozcEngine::PageUp(IbusEngineWrapper* engine) {
   // TODO(mazda,yusukes): Implement this to support arrow icons inside the Gtk+
   // candidate window.
 }
 
-bool MozcEngine::ProcessKeyEvent(IbusEngineWrapper *engine, uint keyval,
+bool MozcEngine::ProcessKeyEvent(IbusEngineWrapper* engine, uint keyval,
                                  uint keycode, uint modifiers) {
   MOZC_VLOG(2) << "keyval: " << keyval << ", keycode: " << keycode
                << ", modifiers: " << modifiers;
@@ -494,8 +494,8 @@ bool MozcEngine::ProcessKeyEvent(IbusEngineWrapper *engine, uint keyval,
   return output.consumed();
 }
 
-void MozcEngine::PropertyActivate(IbusEngineWrapper *engine,
-                                  const char *property_name,
+void MozcEngine::PropertyActivate(IbusEngineWrapper* engine,
+                                  const char* property_name,
                                   uint property_state) {
   // Hide/Show toolbar: toggle visibility, persist choice, and update menu label.
   if (property_name != nullptr && strcmp(property_name, "Toolbar") == 0 &&
@@ -525,23 +525,23 @@ void MozcEngine::PropertyActivate(IbusEngineWrapper *engine,
                                              property_state);
 }
 
-void MozcEngine::PropertyHide(IbusEngineWrapper *engine,
-                              const char *property_name) {
+void MozcEngine::PropertyHide(IbusEngineWrapper* engine,
+                              const char* property_name) {
   // We can ignore the signal.
 }
 
-void MozcEngine::PropertyShow(IbusEngineWrapper *engine,
-                              const char *property_name) {
+void MozcEngine::PropertyShow(IbusEngineWrapper* engine,
+                              const char* property_name) {
   // We can ignore the signal.
 }
 
-void MozcEngine::Reset(IbusEngineWrapper *engine) { RevertSession(engine); }
+void MozcEngine::Reset(IbusEngineWrapper* engine) { RevertSession(engine); }
 
-void MozcEngine::SetCapabilities(IbusEngineWrapper *engine, uint capabilities) {
+void MozcEngine::SetCapabilities(IbusEngineWrapper* engine, uint capabilities) {
   // Do nothing.
 }
 
-void MozcEngine::SetCursorLocation(IbusEngineWrapper *engine, int x, int y,
+void MozcEngine::SetCursorLocation(IbusEngineWrapper* engine, int x, int y,
                                    int w, int h) {
   // Use the (x,y,w,h) from the IBus set_cursor_location signal so the
   // candidate window is positioned below the cursor. engine_->cursor_area
@@ -550,7 +550,7 @@ void MozcEngine::SetCursorLocation(IbusEngineWrapper *engine, int x, int y,
   GetCandidateWindowHandler(engine)->UpdateCursorRect(engine);
 }
 
-void MozcEngine::SetContentType(IbusEngineWrapper *engine, uint purpose,
+void MozcEngine::SetContentType(IbusEngineWrapper* engine, uint purpose,
                                 uint hints) {
   const bool prev_disabled = property_handler_->IsDisabled();
   property_handler_->UpdateContentType(engine);
@@ -621,8 +621,8 @@ bool MozcEngine::LaunchToolFromToolbar(const char* mode) {
   return client_->LaunchTool(std::string(mode), "");
 }
 
-bool MozcEngine::UpdateAll(IbusEngineWrapper *engine,
-                           const commands::Output &output) {
+bool MozcEngine::UpdateAll(IbusEngineWrapper* engine,
+                           const commands::Output& output) {
   UpdateDeletionRange(engine, output);
   UpdateResult(engine, output);
   preedit_handler_->Update(engine, output);
@@ -640,8 +640,8 @@ bool MozcEngine::UpdateAll(IbusEngineWrapper *engine,
   return true;
 }
 
-bool MozcEngine::UpdateDeletionRange(IbusEngineWrapper *engine,
-                                     const commands::Output &output) {
+bool MozcEngine::UpdateDeletionRange(IbusEngineWrapper* engine,
+                                     const commands::Output& output) {
   if (output.has_deletion_range() && output.deletion_range().offset() < 0 &&
       output.deletion_range().offset() + output.deletion_range().length() >=
           0) {
@@ -651,8 +651,8 @@ bool MozcEngine::UpdateDeletionRange(IbusEngineWrapper *engine,
   return true;
 }
 
-bool MozcEngine::UpdateResult(IbusEngineWrapper *engine,
-                              const commands::Output &output) const {
+bool MozcEngine::UpdateResult(IbusEngineWrapper* engine,
+                              const commands::Output& output) const {
   if (!output.has_result()) {
     MOZC_VLOG(2) << "output doesn't contain result";
     return true;
@@ -662,14 +662,14 @@ bool MozcEngine::UpdateResult(IbusEngineWrapper *engine,
   return true;
 }
 
-bool MozcEngine::UpdateCandidateIDMapping(const commands::Output &output) {
+bool MozcEngine::UpdateCandidateIDMapping(const commands::Output& output) {
   if (!output.has_candidate_window() ||
       output.candidate_window().candidate_size() == 0) {
     return true;
   }
 
   unique_candidate_ids_.clear();
-  const commands::CandidateWindow &candidate_window = output.candidate_window();
+  const commands::CandidateWindow& candidate_window = output.candidate_window();
   for (int i = 0; i < candidate_window.candidate_size(); ++i) {
     if (candidate_window.candidate(i).has_id()) {
       const int32_t id = candidate_window.candidate(i).id();
@@ -712,7 +712,7 @@ void MozcEngine::SyncData(bool force) {
   }
 }
 
-bool MozcEngine::LaunchTool(const commands::Output &output) const {
+bool MozcEngine::LaunchTool(const commands::Output& output) const {
   if (!client_->LaunchToolWithProtoBuf(output)) {
     MOZC_VLOG(2) << output << " Launch Failed";
     return false;
@@ -721,7 +721,7 @@ bool MozcEngine::LaunchTool(const commands::Output &output) const {
   return true;
 }
 
-void MozcEngine::RevertSession(IbusEngineWrapper *engine) {
+void MozcEngine::RevertSession(IbusEngineWrapper* engine) {
   // TODO(team): We should skip following actions when there is no on-going
   // composition.
   commands::SessionCommand command;
@@ -734,8 +734,8 @@ void MozcEngine::RevertSession(IbusEngineWrapper *engine) {
   UpdateAll(engine, output);
 }
 
-bool MozcEngine::ExecuteCallback(IbusEngineWrapper *engine,
-                                 const commands::Output &output) {
+bool MozcEngine::ExecuteCallback(IbusEngineWrapper* engine,
+                                 const commands::Output& output) {
   if (!output.has_callback()) {
     return false;
   }
@@ -746,7 +746,7 @@ bool MozcEngine::ExecuteCallback(IbusEngineWrapper *engine,
     return false;
   }
 
-  const commands::SessionCommand &callback_command =
+  const commands::SessionCommand& callback_command =
       output.callback().session_command();
 
   if (!callback_command.has_type()) {
@@ -795,7 +795,7 @@ bool MozcEngine::ExecuteCallback(IbusEngineWrapper *engine,
 
   if (callback_command.type() == commands::SessionCommand::CONVERT_REVERSE) {
     // We need to remove selected text as a first step of reconversion.
-    commands::DeletionRange *range = new_output.mutable_deletion_range();
+    commands::DeletionRange* range = new_output.mutable_deletion_range();
     // Use DeletionRange field to remove the selected text.
     // For forward selection (that is, |relative_selected_length > 0|), the
     // offset should be a negative value to delete preceding text.
@@ -816,8 +816,8 @@ bool MozcEngine::ExecuteCallback(IbusEngineWrapper *engine,
   return true;
 }
 
-CandidateWindowHandlerInterface *MozcEngine::GetCandidateWindowHandler(
-    IbusEngineWrapper *engine) {
+CandidateWindowHandlerInterface* MozcEngine::GetCandidateWindowHandler(
+    IbusEngineWrapper* engine) {
   if (use_mozc_candidate_window_ &&
       engine->CheckCapabilities(IBUS_CAP_PREEDIT_TEXT)) {
     return &mozc_candidate_window_handler_;
@@ -826,8 +826,8 @@ CandidateWindowHandlerInterface *MozcEngine::GetCandidateWindowHandler(
 }
 
 bool CanUseMozcCandidateWindow(
-    const IbusConfig &ibus_config,
-    const absl::flat_hash_map<std::string, std::string> &env) {
+    const IbusConfig& ibus_config,
+    const absl::flat_hash_map<std::string, std::string>& env) {
   if (!ibus_config.IsMozcRendererEnabled()) {
     return false;
   }
@@ -847,7 +847,7 @@ bool CanUseMozcCandidateWindow(
   if (current_desktops.empty()) {
     return false;
   }
-  for (const std::string &compatible_desktop :
+  for (const std::string& compatible_desktop :
        ibus_config.GetMozcRendererCompatibleWaylandDesktopNames()) {
     if (std::find(current_desktops.begin(), current_desktops.end(),
                   compatible_desktop) != current_desktops.end()) {

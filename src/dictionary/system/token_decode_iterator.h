@@ -37,9 +37,10 @@
 #include "absl/log/log.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
+#include "absl/types/span.h"
 #include "base/japanese_util.h"
 #include "dictionary/dictionary_token.h"
-#include "dictionary/system/codec_interface.h"
+#include "dictionary/system/codec.h"
 #include "dictionary/system/words_info.h"
 #include "storage/louds/louds_trie.h"
 
@@ -50,10 +51,10 @@ class TokenDecodeIterator {
  public:
   TokenDecodeIterator(const TokenDecodeIterator&) = delete;
   TokenDecodeIterator& operator=(const TokenDecodeIterator&) = delete;
-  TokenDecodeIterator(const SystemDictionaryCodecInterface* codec,
+  TokenDecodeIterator(const SystemDictionaryCodec& codec,
                       const storage::louds::LoudsTrie& value_trie,
-                      const uint32_t* frequent_pos, absl::string_view key,
-                      const uint8_t* ptr);
+                      absl::Span<const uint32_t> frequent_pos,
+                      absl::string_view key, const uint8_t* ptr);
   ~TokenDecodeIterator() = default;
 
   const TokenInfo& Get() const { return token_info_; }
@@ -69,16 +70,16 @@ class TokenDecodeIterator {
 
   void NextInternal();
 
-  void LookupValue(int id, std::string* value) const {
+  std::string LookupValue(int id) const {
     char buffer[storage::louds::LoudsTrie::kMaxDepth + 1];
     const absl::string_view encoded_value =
-        value_trie_->RestoreKeyString(id, buffer);
-    codec_->DecodeValue(encoded_value, value);
+        value_trie_.RestoreKeyString(id, buffer);
+    return codec_.DecodeValue(encoded_value);
   }
 
-  const SystemDictionaryCodecInterface* codec_;
-  const storage::louds::LoudsTrie* value_trie_;
-  const uint32_t* frequent_pos_;
+  const SystemDictionaryCodec& codec_;
+  const storage::louds::LoudsTrie& value_trie_;
+  absl::Span<const uint32_t> frequent_pos_;
 
   const absl::string_view key_;
   // Katakana key will be lazily initialized.
@@ -94,11 +95,12 @@ class TokenDecodeIterator {
 // Implementation is inlined for performance.
 
 inline TokenDecodeIterator::TokenDecodeIterator(
-    const SystemDictionaryCodecInterface* codec,
-    const storage::louds::LoudsTrie& value_trie, const uint32_t* frequent_pos,
-    absl::string_view key, const uint8_t* ptr)
+    const SystemDictionaryCodec& codec,
+    const storage::louds::LoudsTrie& value_trie,
+    absl::Span<const uint32_t> frequent_pos, absl::string_view key,
+    const uint8_t* ptr)
     : codec_(codec),
-      value_trie_(&value_trie),
+      value_trie_(value_trie),
       frequent_pos_(frequent_pos),
       key_(key),
       state_(HAS_NEXT),
@@ -142,7 +144,7 @@ inline void TokenDecodeIterator::NextInternal() {
   // This kind of structure should be packed in the codec or some
   // related but new class.
   int read_bytes;
-  if (!codec_->DecodeToken(ptr_, &token_info_, &read_bytes)) {
+  if (!codec_.DecodeToken(ptr_, &token_info_, &read_bytes)) {
     state_ = LAST_TOKEN;
   }
   ptr_ += read_bytes;
@@ -150,8 +152,7 @@ inline void TokenDecodeIterator::NextInternal() {
   // Fill remaining values.
   switch (token_info_.value_type) {
     case TokenInfo::DEFAULT_VALUE: {
-      token_.value.clear();
-      LookupValue(token_info_.id_in_value_trie, &token_.value);
+      token_.value = LookupValue(token_info_.id_in_value_trie);
       break;
     }
     case TokenInfo::SAME_AS_PREV_VALUE: {

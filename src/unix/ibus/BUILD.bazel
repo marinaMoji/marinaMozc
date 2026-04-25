@@ -296,8 +296,6 @@ mozc_cc_library(
         "//base:clock",
         "//base:const",
         "//base:file_util",
-        "//base:port",
-        "//base:singleton",
         "//base:system_util",
         "//base:util",
         "//base:vlog",

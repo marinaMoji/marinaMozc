@@ -70,8 +70,10 @@
 #include "data_manager/testing/mock_data_manager.h"
 #include "dictionary/dictionary_interface.h"
 #include "dictionary/dictionary_mock.h"
+#include "dictionary/dictionary_token.h"
 #include "engine/modules.h"
 #include "engine/supplemental_model_mock.h"
+#include "prediction/realtime_decoder.h"
 #include "prediction/result.h"
 #include "prediction/user_history_predictor.pb.h"
 #include "prediction/user_history_storage.h"
@@ -102,6 +104,19 @@ using ::testing::Return;
 
 constexpr int kRevertId = 1234;
 
+class MockRealtimeDecoder : public RealtimeDecoder {
+ public:
+  ~MockRealtimeDecoder() override = default;
+
+  MOCK_METHOD(std::vector<Result>, Decode, (const ConversionRequest& request),
+              (const, override));
+
+  MOCK_METHOD(std::optional<Result>, DecodeSuffix,
+              (const ConversionRequest& request, uint16_t prefix_rid,
+               absl::string_view suffix),
+              (const.override));
+};
+
 }  // namespace
 
 class UserHistoryPredictorTestPeer
@@ -127,9 +142,11 @@ class UserHistoryPredictorTestPeer
   PEER_METHOD(RomanFuzzyLookupEntry);
   PEER_METHOD(LookupEntry);
   PEER_METHOD(RemoveNgramChain);
+  PEER_METHOD(IsProperNoun);
   PEER_VARIABLE(storage_);
   PEER_DECLARE(MatchType);
   PEER_DECLARE(EntryPriorityQueue);
+  PEER_DECLARE(Attribute);
 };
 
 // Needs to call UpdateHistoryResult() to update history_result_.
@@ -161,6 +178,10 @@ class SegmentsProxy {
                     absl::string_view value) {
     segments_[segment_index].results[candidate_index].value = value;
     UpdateHistoryResult();
+  }
+
+  Result* MutableCandidate(size_t segment_index, int candidate_index) {
+    return &segments_[segment_index].results[candidate_index];
   }
 
   void PushBackInnerSegmentBoundary(int segment_index, int candidate_index,
@@ -591,6 +612,7 @@ class UserHistoryPredictorTest : public testing::TestWithTempUserProfile {
  private:
   struct DataAndPredictor {
     std::unique_ptr<engine::Modules> modules;
+    std::unique_ptr<RealtimeDecoder> realtime_decoder;
     std::unique_ptr<UserHistoryPredictor> predictor;
   };
 
@@ -600,7 +622,9 @@ class UserHistoryPredictorTest : public testing::TestWithTempUserProfile {
                        .PresetDictionary(std::make_unique<MockDictionary>())
                        .Build(std::make_unique<testing::MockDataManager>())
                        .value();
-    ret->predictor = std::make_unique<UserHistoryPredictor>(*ret->modules);
+    ret->realtime_decoder = std::make_unique<MockRealtimeDecoder>();
+    ret->predictor = std::make_unique<UserHistoryPredictor>(
+        *ret->modules, *ret->realtime_decoder);
     ret->predictor->Wait();
     return ret;
   }
@@ -2418,7 +2442,8 @@ TEST_F(UserHistoryPredictorTest, GetScore) {
     entry2.set_key("foo");
     entry2.set_value("ABC");
     entry2.set_last_access_time(10);
-    entry2.set_bigram_boost(true);
+    entry2.set_attributes(
+        UserHistoryPredictorTestPeer::Attribute::BIGRAM_BOOST);
 
     EXPECT_GT(UserHistoryPredictorTestPeer::GetScore(entry2),
               UserHistoryPredictorTestPeer::GetScore(entry1));
@@ -2431,7 +2456,8 @@ TEST_F(UserHistoryPredictorTest, GetScore) {
     entry1.set_key("abc");
     entry1.set_value("ABCD");
     entry1.set_last_access_time(10);
-    entry1.set_bigram_boost(true);
+    entry1.set_attributes(
+        UserHistoryPredictorTestPeer::Attribute::BIGRAM_BOOST);
 
     entry2.set_key("foo");
     entry2.set_value("ABC");
@@ -3344,76 +3370,65 @@ TEST_F(UserHistoryPredictorTest, GetInputKeyFromSegmentsKana) {
 }
 
 TEST_F(UserHistoryPredictorTest, RealtimeConversionInnerSegment) {
-  for (bool cache_inner_segment_boundary : {true, false}) {
-    for (bool mixed_conversion : {true, false}) {
-      UserHistoryPredictor* predictor =
-          GetUserHistoryPredictorWithClearedHistory();
+  for (bool mixed_conversion : {true, false}) {
+    UserHistoryPredictor* predictor =
+        GetUserHistoryPredictorWithClearedHistory();
 
-      SegmentsProxy segments_proxy;
-      std::vector<Result> results;
+    SegmentsProxy segments_proxy;
+    std::vector<Result> results;
 
-      request_.set_mixed_conversion(mixed_conversion);
-      request_.mutable_decoder_experiment_params()
-          ->set_user_history_cache_inner_segment_boundary(
-              cache_inner_segment_boundary);
-      const bool cache_full_sentence_expected =
-          !mixed_conversion || cache_inner_segment_boundary;
+    request_.set_mixed_conversion(mixed_conversion);
 
-      {
-        constexpr absl::string_view kKey = "わたしのなまえはなかのです";
-        constexpr absl::string_view kValue = "私の名前は中野です";
-        const ConversionRequest convreq1 =
-            SetUpInputForPrediction(kKey, &composer_, &segments_proxy);
-        segments_proxy.AddCandidate(0, kValue);
-        // "わたしの, 私の", "わたし, 私"
-        segments_proxy.PushBackInnerSegmentBoundary(0, 0, 12, 6, 9, 3);
-        // "なまえは, 名前は", "なまえ, 名前"
-        segments_proxy.PushBackInnerSegmentBoundary(0, 0, 12, 9, 9, 6);
-        // "なかのです, 中野です", "なかの, 中野"
-        segments_proxy.PushBackInnerSegmentBoundary(0, 0, 15, 12, 9, 6);
-        predictor->Finish(convreq1, segments_proxy.MakeLearningResults(),
-                          kRevertId);
+    {
+      constexpr absl::string_view kKey = "わたしのなまえはなかのです";
+      constexpr absl::string_view kValue = "私の名前は中野です";
+      const ConversionRequest convreq1 =
+          SetUpInputForPrediction(kKey, &composer_, &segments_proxy);
+      segments_proxy.AddCandidate(0, kValue);
+      // "わたしの, 私の", "わたし, 私"
+      segments_proxy.PushBackInnerSegmentBoundary(0, 0, 12, 6, 9, 3);
+      // "なまえは, 名前は", "なまえ, 名前"
+      segments_proxy.PushBackInnerSegmentBoundary(0, 0, 12, 9, 9, 6);
+      // "なかのです, 中野です", "なかの, 中野"
+      segments_proxy.PushBackInnerSegmentBoundary(0, 0, 15, 12, 9, 6);
+      predictor->Finish(convreq1, segments_proxy.MakeLearningResults(),
+                        kRevertId);
 
-        UserHistoryPredictorTestPeer predictor_peer(*predictor);
-        auto entry = predictor_peer.storage_().MutableLookup(kKey, kValue);
-        if (cache_full_sentence_expected) {
-          EXPECT_TRUE(entry);
-        } else {
-          EXPECT_FALSE(entry);
-        }
-      }
-      segments_proxy.Clear();
+      UserHistoryPredictorTestPeer predictor_peer(*predictor);
+      auto entry = predictor_peer.storage_().MutableLookup(kKey, kValue);
+      EXPECT_TRUE(entry);
+    }
+    segments_proxy.Clear();
 
-      const ConversionRequest convreq2 =
-          SetUpInputForPrediction("なかの", &composer_, &segments_proxy);
-      results = predictor->Predict(convreq2);
-      EXPECT_FALSE(results.empty());
-      EXPECT_TRUE(FindCandidateByValue("中野", results));
-      EXPECT_FALSE(FindCandidateByValue("中野です", results));
-      segments_proxy.Clear();
+    const ConversionRequest convreq2 =
+        SetUpInputForPrediction("なかの", &composer_, &segments_proxy);
+    results = predictor->Predict(convreq2);
+    EXPECT_FALSE(results.empty());
+    EXPECT_TRUE(FindCandidateByValue("中野", results));
+    EXPECT_FALSE(FindCandidateByValue("中野です", results));
+    segments_proxy.Clear();
 
-      const ConversionRequest convreq3 =
-          SetUpInputForPrediction("なかので", &composer_, &segments_proxy);
-      results = predictor->Predict(convreq3);
-      EXPECT_FALSE(results.empty());
-      EXPECT_TRUE(FindCandidateByValue("中野です", results));
+    const ConversionRequest convreq3 =
+        SetUpInputForPrediction("なかので", &composer_, &segments_proxy);
+    results = predictor->Predict(convreq3);
+    EXPECT_FALSE(results.empty());
+    EXPECT_TRUE(FindCandidateByValue("中野です", results));
 
-      segments_proxy.Clear();
-      const ConversionRequest convreq4 =
-          SetUpInputForPrediction("なまえ", &composer_, &segments_proxy);
-      results = predictor->Predict(convreq4);
-      EXPECT_FALSE(results.empty());
-      EXPECT_TRUE(FindCandidateByValue("名前", results));
-      // Do not suggest the phrase ends with [content_word + function_word].
-      EXPECT_FALSE(FindCandidateByValue("名前は", results));
-      EXPECT_FALSE(FindCandidateByValue("名前は中野です", results));
-      if (mixed_conversion) {
-        // prefer exact match.
-        EXPECT_FALSE(FindCandidateByValue("名前は中野", results));
-      } else {
-        // prefer prediction.
-        EXPECT_TRUE(FindCandidateByValue("名前は中野", results));
-      }
+    segments_proxy.Clear();
+    const ConversionRequest convreq4 =
+        SetUpInputForPrediction("なまえ", &composer_, &segments_proxy);
+    results = predictor->Predict(convreq4);
+    EXPECT_FALSE(results.empty());
+    EXPECT_TRUE(FindCandidateByValue("名前", results));
+    // Do not suggest the phrase ends with [content_word + function_word].
+    EXPECT_FALSE(FindCandidateByValue("名前は", results));
+    EXPECT_FALSE(FindCandidateByValue("名前は中野です", results));
+    if (mixed_conversion) {
+      // prefer exact match.
+      EXPECT_FALSE(FindCandidateByValue("名前は中野", results));
+    } else {
+      // prefer prediction.
+      EXPECT_TRUE(FindCandidateByValue("名前は中野", results));
     }
   }
 }
@@ -3445,7 +3460,6 @@ TEST_F(UserHistoryPredictorTest, ZeroQueryFromRealtimeConversion) {
   predictor->Finish(convreq2, segments_proxy.MakeLearningResults(), kRevertId);
   segments_proxy.SetHistoryType(0);
 
-  commands::Request request;
   request_.set_zero_query_suggestion(true);
   const ConversionRequest convreq3 = SetUpInputForSuggestionWithHistory(
       "", "わたしの", "私の", &composer_, &segments_proxy);
@@ -3674,25 +3688,37 @@ TEST_F(UserHistoryPredictorTest, ClearHistoryEntryUnigram) {
   // Tests ClearHistoryEntry() for unigram history.
   UserHistoryPredictor* predictor = GetUserHistoryPredictorWithClearedHistory();
 
-  // Add a unigram history ("japanese", "Japanese").
-  UserHistoryPredictor::Entry* e =
-      InsertEntry(predictor, "japanese", "Japanese");
-  e->set_last_access_time(1);
+  {
+    // Add a unigram history ("japanese", "Japanese").
+    UserHistoryPredictor::Entry* e =
+        InsertEntry(predictor, "japanese", "Japanese");
+    e->set_last_access_time(1);
 
-  // "Japanese" should be suggested and predicted from "japan".
-  EXPECT_TRUE(IsSuggestedAndPredicted(predictor, "japan", "Japanese"));
+    // "Japanese" should be suggested and predicted from "japan".
+    EXPECT_TRUE(IsSuggestedAndPredicted(predictor, "japan", "Japanese"));
 
-  // Delete the history.
-  EXPECT_TRUE(predictor->ClearHistoryEntry("japanese", "Japanese"));
+    // Delete the history.
+    EXPECT_TRUE(predictor->ClearHistoryEntry("japanese", "Japanese"));
 
-  EXPECT_TRUE(e->removed());
+    EXPECT_TRUE(e->removed());
 
-  // "Japanese" should be never be suggested nor predicted.
-  constexpr absl::string_view kKey = "japanese";
-  for (size_t i = 0; i < kKey.size(); ++i) {
-    absl::string_view prefix = kKey.substr(0, i);
-    EXPECT_FALSE(IsSuggested(predictor, prefix, "Japanese"));
-    EXPECT_FALSE(IsPredicted(predictor, prefix, "Japanese"));
+    // "Japanese" should be never be suggested nor predicted.
+    constexpr absl::string_view kKey = "japanese";
+    for (size_t i = 0; i < kKey.size(); ++i) {
+      absl::string_view prefix = kKey.substr(0, i);
+      EXPECT_FALSE(IsSuggested(predictor, prefix, "Japanese"));
+      EXPECT_FALSE(IsPredicted(predictor, prefix, "Japanese"));
+    }
+  }
+
+  // Prefix space.
+  {
+    // The data is stored with zero width sapce.
+    UserHistoryPredictor::Entry* e =
+        InsertEntry(predictor, "\u200bとうきょう", "\u200b東京");
+    EXPECT_FALSE(e->removed());
+    EXPECT_TRUE(predictor->ClearHistoryEntry(" とうきょう", " 東京"));
+    EXPECT_TRUE(e->removed());
   }
 }
 
@@ -4874,7 +4900,9 @@ TEST_F(UserHistoryPredictorTest, TypingCorrection) {
           .PresetSupplementalModel(std::move(mock))
           .Build(std::make_unique<testing::MockDataManager>())
           .value();
-  auto predictor = std::make_unique<UserHistoryPredictor>(*modules);
+  auto realtime_decoder = std::make_unique<MockRealtimeDecoder>();
+  auto predictor =
+      std::make_unique<UserHistoryPredictor>(*modules, *realtime_decoder);
   predictor->Wait();
 
   ScopedClockMock clock(absl::FromUnixSeconds(1));
@@ -5177,7 +5205,9 @@ TEST_F(UserHistoryPredictorTest, PartialRevert) {
           .PresetSupplementalModel(std::move(mock))
           .Build(std::make_unique<testing::MockDataManager>())
           .value();
-  auto predictor = std::make_unique<UserHistoryPredictor>(*modules);
+  auto realtime_decoder = std::make_unique<MockRealtimeDecoder>();
+  auto predictor =
+      std::make_unique<UserHistoryPredictor>(*modules, *realtime_decoder);
 
   auto has_entry = [&](absl::string_view key, absl::string_view value) {
     UserHistoryPredictorTestPeer predictor_peer(*predictor);
@@ -5385,6 +5415,20 @@ TEST_F(UserHistoryPredictorTest, PartialRevert) {
     EXPECT_FALSE(has_entry("そつぎょうした", "卒業した"));
   }
 
+  // Zero query. partial-revert handling is invoked when user has
+  // started new input.
+  {
+    init_predictor();
+    results = suggest_with_context("", "佐藤さんは京都大学を卒業し");
+    EXPECT_TRUE(results.empty());
+
+    EXPECT_FALSE(has_entry("さとうさんは", "佐藤さんは"));
+    EXPECT_FALSE(has_entry("さとうさん", "佐藤さん"));
+    EXPECT_FALSE(has_entry("きょうとだいがくを", "京都大学を"));
+    EXPECT_FALSE(has_entry("きょうとだいがく", "京都大学"));
+    EXPECT_FALSE(has_entry("そつぎょうした", "卒業した"));
+  }
+
   // Adds extra characters directly w/o using IME.
   {
     init_predictor();
@@ -5427,10 +5471,6 @@ TEST_F(UserHistoryPredictorTest, PredictPrefixSpace) {
 
   request_.set_zero_query_suggestion(true);
   request_.set_mixed_conversion(true);
-
-  // Remembers full sentence with inner boundary. "渋谷は"
-  request_.mutable_decoder_experiment_params()
-      ->set_user_history_cache_inner_segment_boundary(true);
 
   auto convert_unigram = [&](absl::string_view key, absl::string_view value) {
     segments_proxy.Clear();
@@ -5663,6 +5703,305 @@ TEST_F(UserHistoryPredictorTest, AddHistoryEntryTest) {
   EXPECT_FALSE(IsSuggested(predictor, "おおさか", "大阪"));
   EXPECT_TRUE(predictor->AddHistoryEntry(" おおさか   ", "  大阪 "));
   EXPECT_TRUE(IsSuggested(predictor, "おおさか", "大阪"));
+}
+
+TEST_F(UserHistoryPredictorTest, IsProperNounTest) {
+  auto mock_dictionary = std::make_unique<MockDictionary>();
+  MockDictionary* dictionary = mock_dictionary.get();
+  std::unique_ptr<engine::Modules> modules =
+      engine::ModulesPresetBuilder()
+          .PresetDictionary(std::move(mock_dictionary))
+          .Build(std::make_unique<testing::MockDataManager>())
+          .value();
+  auto realtime_decoder = std::make_unique<MockRealtimeDecoder>();
+  auto predictor =
+      std::make_unique<UserHistoryPredictor>(*modules, *realtime_decoder);
+  predictor->Wait();
+  UserHistoryPredictorTestPeer predictor_peer(*predictor);
+
+  EXPECT_CALL(*dictionary, LookupExact(_, _, _))
+      .WillRepeatedly([&](absl::string_view key,
+                          const ConversionRequest& request,
+                          dictionary::DictionaryInterface::Callback* cb) {
+        dictionary::Token token;
+        // "たなか" is registered as proper noun.
+        if (key == "たなか") {
+          token.lid = token.rid = modules->GetPosMatcher().GetLastNameId();
+          EXPECT_EQ(cb->OnToken(key, "", token),
+                    dictionary::InlineCallback::TRAVERSE_DONE);
+          return true;
+        }
+        token.lid = token.rid = 0;
+        EXPECT_EQ(cb->OnToken(key, "", token),
+                  dictionary::InlineCallback::TRAVERSE_CONTINUE);
+        return false;
+      });
+
+  const ConversionRequest req = ConversionRequestBuilder().Build();
+
+  Result result;
+
+  result.key = "あ";
+  result.value = "あいう";
+  EXPECT_FALSE(predictor_peer.IsProperNoun(req, result));
+
+  result.key = "あいう";
+  result.value = "カタカナ";
+  EXPECT_TRUE(predictor_peer.IsProperNoun(req, result));
+
+  result.key = "やま";
+  result.value = "山";
+  result.types = prediction::SINGLE_KANJI;
+  EXPECT_TRUE(predictor_peer.IsProperNoun(req, result));
+
+  result.key = "123";
+  result.value = "123";
+  result.types = prediction::NUMBER;
+  EXPECT_TRUE(predictor_peer.IsProperNoun(req, result));
+
+  result.key = "やました";
+  result.value = "山下";
+  result.types = 0;
+  result.lid = result.rid = modules->GetPosMatcher().GetLastNameId();
+  EXPECT_TRUE(predictor_peer.IsProperNoun(req, result));
+
+  // "たなか" is registered as proper noun.
+  result.key = "たなか";
+  result.value = "田中";
+  result.types = 0;
+  result.lid = result.rid = 0;
+  EXPECT_TRUE(predictor_peer.IsProperNoun(req, result));
+
+  // "たなか" is registered as proper noun, but value must be Kanji.
+  result.key = "たなか";
+  result.value = "たなか";
+  result.types = 0;
+  result.lid = result.rid = 0;
+  EXPECT_FALSE(predictor_peer.IsProperNoun(req, result));
+
+  // "じんるい" is registered as proper noun.
+  result.key = "じんるい";
+  result.value = "人類";
+  result.types = 0;
+  result.lid = result.rid = 0;
+  EXPECT_FALSE(predictor_peer.IsProperNoun(req, result));
+}
+
+TEST_F(UserHistoryPredictorTest, ExactMatchTest) {
+  UserHistoryPredictor* predictor = GetUserHistoryPredictorWithClearedHistory();
+
+  SegmentsProxy segments_proxy;
+  std::vector<Result> results;
+
+  request_.set_mixed_conversion(true);
+
+  // Create full sentence entry with boundary information.
+  // By default, full sentence is allowed to be suggested when the freq >= 2.
+  // However, allow full sentence to be suggested when
+  // allow_exact_match flag is true and the query is exact match.
+  constexpr absl::string_view kKey = "わたしのなまえはなかのです";
+  constexpr absl::string_view kValue = "私の名前は中野です";
+  {
+    const ConversionRequest convreq1 =
+        SetUpInputForPrediction(kKey, &composer_, &segments_proxy);
+    segments_proxy.AddCandidate(0, kValue);
+    segments_proxy.PushBackInnerSegmentBoundary(0, 0, 12, 6, 9, 3);
+    segments_proxy.PushBackInnerSegmentBoundary(0, 0, 12, 9, 9, 6);
+    segments_proxy.PushBackInnerSegmentBoundary(0, 0, 15, 12, 9, 6);
+    predictor->Finish(convreq1, segments_proxy.MakeLearningResults(),
+                      kRevertId);
+    UserHistoryPredictorTestPeer predictor_peer(*predictor);
+    auto entry = predictor_peer.storage_().MutableLookup(kKey, kValue);
+    EXPECT_TRUE(entry);
+    segments_proxy.Clear();
+  }
+
+  for (bool allow_exact_match : {false, true}) {
+    for (int freq : {1, 2}) {
+      request_.mutable_decoder_experiment_params()
+          ->set_user_history_allow_exact_match(allow_exact_match);
+
+      UserHistoryPredictorTestPeer predictor_peer(*predictor);
+      auto entry = predictor_peer.storage_().MutableLookup(kKey, kValue);
+      ASSERT_TRUE(entry);
+      entry->set_suggestion_freq(freq);
+      ASSERT_EQ(entry->inner_segment_boundary_size(), 3);
+
+      // Short partial
+      segments_proxy.Clear();
+      const ConversionRequest convreq1 = SetUpInputForPrediction(
+          "わたしのなまえは", &composer_, &segments_proxy);
+      results = predictor->Predict(convreq1);
+      // Partial matche is allowed when the entry is typed twice or more.
+      if (freq >= 2) {
+        EXPECT_FALSE(results.empty());
+      } else {
+        EXPECT_TRUE(results.empty());
+      }
+
+      // Partial that reaches to the last segment.
+      segments_proxy.Clear();
+      const ConversionRequest convreq2 = SetUpInputForPrediction(
+          "わたしのなまえはな", &composer_, &segments_proxy);
+      results = predictor->Predict(convreq2);
+      if (allow_exact_match || freq >= 2) {
+        EXPECT_FALSE(results.empty());
+        EXPECT_EQ(results[0].value, kValue);
+        EXPECT_EQ(results[0].key, kKey);
+      } else {
+        EXPECT_TRUE(results.empty());
+      }
+
+      // Exact
+      segments_proxy.Clear();
+      const ConversionRequest convreq3 =
+          SetUpInputForPrediction(kKey, &composer_, &segments_proxy);
+      results = predictor->Predict(convreq3);
+      if (allow_exact_match || freq >= 2) {
+        EXPECT_FALSE(results.empty());
+        EXPECT_EQ(results[0].value, kValue);
+        EXPECT_EQ(results[0].key, kKey);
+      } else {
+        EXPECT_TRUE(results.empty());
+      }
+    }
+  }
+}
+
+TEST_F(UserHistoryPredictorTest, PartialMatchTest) {
+  std::unique_ptr<engine::Modules> modules =
+      engine::ModulesPresetBuilder()
+          .PresetDictionary(std::make_unique<MockDictionary>())
+          .Build(std::make_unique<testing::MockDataManager>())
+          .value();
+  auto realtime_decoder = std::make_unique<MockRealtimeDecoder>();
+  auto predictor =
+      std::make_unique<UserHistoryPredictor>(*modules, *realtime_decoder);
+  predictor->Wait();
+
+  commands::DecoderExperimentParams* params =
+      request_.mutable_decoder_experiment_params();
+  params->set_user_history_allow_partial_match(true);
+  request_.set_mixed_conversion(true);
+
+  const uint16_t first_name_id = modules->GetPosMatcher().GetFirstNameId();
+
+  EXPECT_CALL(*realtime_decoder, DecodeSuffix(_, _, _))
+      .WillRepeatedly([&](const ConversionRequest& request, uint16_t prefix_rid,
+                          absl::string_view suffix) {
+        Result result;
+        result.key = suffix;
+        if (suffix == "たくさん") {
+          EXPECT_EQ(prefix_rid, 0);
+          result.value = "沢山";
+          result.cost = 5000;
+          return result;
+        } else if (suffix == "たくの") {
+          EXPECT_EQ(prefix_rid, 0);
+          result.value = "宅の";
+          result.cost = 1000;
+          result.inner_segment_boundary =
+              converter::InnerSegmentBoundaryBuilder()
+                  .Add(9, 6, 6, 3)  // 宅|の
+                  .Build(result.key, result.value);
+          return result;
+        }
+
+        // "の", "さん"
+        result.key = result.value = suffix;
+        result.cost = 500;
+        result.lid = modules->GetPosMatcher().GetFunctionalId();
+        EXPECT_EQ(prefix_rid, first_name_id);
+        return result;
+      });
+
+  SegmentsProxy segments_proxy;
+
+  // Learn "拓"
+  {
+    const ConversionRequest convreq =
+        SetUpInputForConversion("たく", &composer_, &segments_proxy);
+    segments_proxy.AddCandidate(0, "拓");
+    segments_proxy.MutableCandidate(0, 0)->rid = first_name_id;
+    predictor->Finish(convreq, segments_proxy.MakeLearningResults(), kRevertId);
+    EXPECT_TRUE(IsSuggested(predictor.get(), "たく", "拓"));
+  }
+
+  std::vector<Result> results;
+
+  // Cost-based filtering.  Rejected by boundary-based filtering.
+  {
+    segments_proxy.Clear();
+    const ConversionRequest convreq =
+        SetUpInputForPrediction("たくさん", &composer_, &segments_proxy);
+
+    // trans(bos, first_name_id) + prefix_penalty(first_name_id) = 3599.
+    // 3599 is added to the prefix wcost.
+
+    // 3599 + 500(wcost) + {5000, 2000} > 5000(full_cost) -> NG
+    params->set_user_history_partial_prefix_wcost(5000);
+    params->set_user_history_partial_weak_prefix_wcost(2000);
+    results = predictor->Predict(convreq);
+    EXPECT_TRUE(results.empty());
+
+    // 3599 + 500(wcost) + {2000} > 5000(full_cost) -> NG
+    // 3599 + 500(wcost) + {0} < 5000(full_cost) -> OK, but weak mode.
+    params->set_user_history_partial_prefix_wcost(2000);
+    params->set_user_history_partial_weak_prefix_wcost(0);
+    results = predictor->Predict(convreq);
+    EXPECT_FALSE(results.empty());  // Weak.
+    EXPECT_EQ(results[0].value, "拓さん");
+    EXPECT_EQ(results[0].key, "たくさん");
+    EXPECT_TRUE(results[0].types & prediction::WEAK_USER_HISTORY_PREDICTION);
+    EXPECT_EQ("たくさん,拓さん,たく,拓", GetKeyValueWithBoundary(results[0]));
+
+    // 3599 + 500(wcost) + {100, 0} < 5000(full_cost) -> OK
+    params->set_user_history_partial_prefix_wcost(100);
+    params->set_user_history_partial_weak_prefix_wcost(0);
+    results = predictor->Predict(convreq);
+    EXPECT_FALSE(results.empty());  // Not weak.
+    EXPECT_EQ(results[0].value, "拓さん");
+    EXPECT_EQ(results[0].key, "たくさん");
+    EXPECT_FALSE(results[0].types & prediction::WEAK_USER_HISTORY_PREDICTION);
+    EXPECT_EQ("たくさん,拓さん,たく,拓", GetKeyValueWithBoundary(results[0]));
+  }
+
+  // Boundary-based filtering -> always non-weak mode.
+  {
+    segments_proxy.Clear();
+    const ConversionRequest convreq =
+        SetUpInputForPrediction("たくの", &composer_, &segments_proxy);
+    // Too aggressive wcost so that cost-based filtering rejects the partial
+    // match.
+    params->set_user_history_partial_prefix_wcost(10000);
+    params->set_user_history_partial_weak_prefix_wcost(10000);
+    results = predictor->Predict(convreq);
+    EXPECT_FALSE(results.empty());
+    EXPECT_EQ(results[0].value, "拓の");
+    EXPECT_EQ(results[0].key, "たくの");
+    EXPECT_FALSE(results[0].types & prediction::WEAK_USER_HISTORY_PREDICTION);
+    EXPECT_EQ("たくの,拓の,たく,拓", GetKeyValueWithBoundary(results[0]));
+  }
+
+  // General noun is typed recently -> Weak mode.
+  {
+    segments_proxy.Clear();
+    const ConversionRequest convreq =
+        SetUpInputForPrediction("たく", &composer_, &segments_proxy);
+    segments_proxy.AddCandidate(0, "宅");  // General noun.
+    predictor->Finish(convreq, segments_proxy.MakeLearningResults(), kRevertId);
+    EXPECT_TRUE(IsSuggested(predictor.get(), "たく", "拓"));
+    EXPECT_TRUE(IsSuggested(predictor.get(), "たく", "宅"));
+
+    const ConversionRequest convreq2 =
+        SetUpInputForPrediction("たくの", &composer_, &segments_proxy);
+    results = predictor->Predict(convreq2);
+    EXPECT_EQ(results.size(), 1);
+    EXPECT_EQ(results[0].value, "拓の");  // Weak.
+    EXPECT_EQ(results[0].key, "たくの");
+    EXPECT_TRUE(results[0].types & prediction::WEAK_USER_HISTORY_PREDICTION);
+    EXPECT_EQ("たくの,拓の,たく,拓", GetKeyValueWithBoundary(results[0]));
+  }
 }
 
 }  // namespace mozc::prediction

@@ -39,20 +39,10 @@ load(
 package(default_visibility = ["//visibility:private"])
 
 mozc_cc_library(
-    name = "codec_interface",
-    hdrs = ["codec_interface.h"],
-    deps = [
-        "@com_google_absl//absl/strings",
-        "@com_google_absl//absl/types:span",
-    ],
-)
-
-mozc_cc_library(
     name = "codec",
     srcs = ["codec.cc"],
     hdrs = [
         "codec.h",
-        "codec_interface.h",
     ],
     deps = [
         ":words_info",
@@ -76,6 +66,7 @@ mozc_cc_test(
         ":words_info",
         "//base:random",
         "//base:util",
+        "//base/container:arena",
         "//dictionary:dictionary_token",
         "//testing:gunit_main",
         "@com_google_absl//absl/log:check",
@@ -90,7 +81,7 @@ mozc_cc_library(
     name = "token_decode_iterator",
     hdrs = ["token_decode_iterator.h"],
     deps = [
-        ":codec_interface",
+        ":codec",
         ":words_info",
         "//base:japanese_util",
         "//dictionary:dictionary_token",
@@ -98,6 +89,7 @@ mozc_cc_library(
         "@com_google_absl//absl/log",
         "@com_google_absl//absl/log:check",
         "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/types:span",
     ],
 )
 
@@ -111,6 +103,7 @@ mozc_cc_library(
         ":key_expansion_table",
         ":token_decode_iterator",
         ":words_info",
+        "//base:bits",
         "//base:japanese_util",
         "//base:mmap",
         "//base:thread",
@@ -118,10 +111,8 @@ mozc_cc_library(
         "//base/strings:unicode",
         "//dictionary:dictionary_interface",
         "//dictionary:dictionary_token",
-        "//dictionary/file:codec_factory",
-        "//dictionary/file:codec_interface",
+        "//dictionary/file:codec",
         "//dictionary/file:dictionary_file",
-        "//request:conversion_request",
         "//storage/louds:bit_vector_based_array",
         "//storage/louds:louds_trie",
         "@com_google_absl//absl/container:btree",
@@ -131,6 +122,7 @@ mozc_cc_library(
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/types:span",
     ],
 )
 
@@ -147,7 +139,6 @@ mozc_cc_library(
         "//dictionary:dictionary_interface",
         "//dictionary:dictionary_token",
         "//dictionary:pos_matcher",
-        "//request:conversion_request",
         "//storage/louds:louds_trie",
         "@com_google_absl//absl/strings",
     ],
@@ -169,8 +160,7 @@ mozc_cc_library(
         "//base:util",
         "//base:vlog",
         "//dictionary:dictionary_token",
-        "//dictionary/file:codec_factory",
-        "//dictionary/file:codec_interface",
+        "//dictionary/file:codec",
         "//dictionary/file:section",
         "//storage/louds:bit_vector_based_array_builder",
         "//storage/louds:louds_trie_builder",
@@ -203,7 +193,6 @@ mozc_cc_test(
         ":system_dictionary_builder",
         "//base:file_util",
         "//base/file:temp_dir",
-        "//config:config_handler",
         "//data_manager/testing:mock_data_manager",
         "//dictionary:dictionary_interface",
         "//dictionary:dictionary_mock",
@@ -212,8 +201,6 @@ mozc_cc_test(
         "//dictionary:pos_matcher",
         "//dictionary:text_dictionary_loader",
         "//protocol:commands_cc_proto",
-        "//protocol:config_cc_proto",
-        "//request:conversion_request",
         "//testing:gunit_main",
         "//testing:mozctest",
         "@com_google_absl//absl/container:btree",
@@ -237,7 +224,6 @@ mozc_cc_test(
         "//dictionary:dictionary_test_util",
         "//dictionary:dictionary_token",
         "//dictionary:pos_matcher",
-        "//request:conversion_request",
         "//storage/louds:louds_trie",
         "//storage/louds:louds_trie_builder",
         "//testing:gunit_main",

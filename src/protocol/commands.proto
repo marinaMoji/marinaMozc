@@ -566,7 +566,7 @@ message Capability {
       [default = NO_TEXT_DELETION_CAPABILITY];
 }
 
-// Next ID: 142
+// Next ID: 149
 // Bundles together some Android experiment flags so that they can be easily
 // retrieved throughout the native code.  These flags are generally specific to
 // the decoder, and are made available when the decoder is initialized.
@@ -656,10 +656,19 @@ message DecoderExperimentParams {
   // The candidate will not be filtered if this value is zero.
   optional int32 suffix_nwp_transition_cost_threshold = 107 [default = 0];
 
-  // Stores inner segment boundary in user history cache.
-  // This information is going to be shared with user_segment_rewriter.
-  optional bool user_history_cache_inner_segment_boundary = 135
-      [default = false];
+  // Allows partial (prefix) match in user history decoding.
+  optional bool user_history_allow_partial_match = 144 [default = false];
+
+  // The wcost of the prefix in a partial match.
+  // Shows the prefix match when [prefix_wcost + suffix_cost <= full_cost].
+  optional int32 user_history_partial_prefix_wcost = 145 [default = 2000];
+
+  // The cost of the prefix in a partial match.
+  // Shows the prefix match as a weak candidate when
+  // [weak_prefix_wcost + suffix_cost <= full_cost].
+  // weak_prefix_wcost should be smaller than prefix_wcost.
+  // The default wcost is zero, which is the most optimistic setting.
+  optional int32 user_history_partial_weak_prefix_wcost = 146 [default = 0];
 
   // Position of the first symbol rewriter candidate (0-origin).
   optional int32 symbol_rewriter_candidate_position = 132 [default = 3];
@@ -673,14 +682,29 @@ message DecoderExperimentParams {
 
   // Minimum post correction probability to promote dictionary suggestion
   // over the history suggestion.
-  optional float candidate_mixing_min_post_correction_prob = 141 [default = 0.0];
+  optional float candidate_mixing_min_post_correction_prob = 141
+      [default = 0.0];
+
+  // Cost penalty added to the partial candidate. Partial candidate should not
+  // be ranked lower than normal full candidates.
+  optional int32 partial_candidate_cost_penalty = 143 [default = 5000];
+
+  // Mode to disable legacy rewriters. This flag is used in migration
+  // experiments from legacy modules to new supplemental model and user history
+  // predictor.
+  optional int32 disable_legacy_rewriter_mode = 147 [default = 0];
+
+  // Allow exact match in user_history decoding even when
+  // the frequency is low.
+  // This flag is used when user_history_cache_inner_segment_boundary is true.
+  optional bool user_history_allow_exact_match = 148 [default = false];
 }
 
 // Clients' request to the server.
 // Users cannot modify this.
 // In the future each request may be able to be overwritten by Config.
 // The server does not have to obey this request.
-// Next ID: 25
+// Next ID: 26
 message Request {
   // Enable zero query suggestion.
   optional bool zero_query_suggestion = 1
@@ -914,6 +938,12 @@ message Request {
   // Enables a11y support for candidates.
   // If this field is set to true, a11y description is set to each candidate.
   optional bool enable_a11y_description = 20 [default = false];
+
+  // Whether TalkBack is enabled.
+  // Some conversion behaviors should be changed when TalkBack is enabled.
+  // e.g. The candidate window should be always visible to propagate the
+  // candidate words to TalkBack.
+  optional bool is_a11y_talkback_enabled = 25 [default = false];
 
   // Additional Character Group represents certain group of characters, that can
   // be additionaly requested from the client side, based on font-availability

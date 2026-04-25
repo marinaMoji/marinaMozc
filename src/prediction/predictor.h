@@ -41,6 +41,7 @@
 #include "dictionary/pos_matcher.h"
 #include "engine/modules.h"
 #include "prediction/predictor_interface.h"
+#include "prediction/realtime_decoder.h"
 #include "prediction/result.h"
 #include "request/conversion_request.h"
 
@@ -112,6 +113,13 @@ class Predictor : public PredictorInterface {
       const ConversionRequest& request,
       std::vector<Result> user_history_results,
       std::vector<Result> dictionary_results) const;
+
+  // The results with WEAK_USER_HISTORY_PREDICTION are demoted so that they
+  // are not ranked at the top.
+  static void DemoteWeakUserHistory(absl::Span<Result> results);
+
+  // Shared by dictionary_predictor and user_history_predictor.
+  std::unique_ptr<RealtimeDecoder> realtime_decoder_;
 
   std::unique_ptr<PredictorInterface> dictionary_predictor_;
   std::unique_ptr<PredictorInterface> user_history_predictor_;
